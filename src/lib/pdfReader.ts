@@ -23,6 +23,7 @@ import type {
  */
 const PDFJS_VERSION = '5.4.530'; // Must match installed pdfjs-dist version
 const WORKER_SRC = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
+const STANDARD_FONTS_URL = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/standard_fonts/`;
 
 // Configure the worker source
 pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_SRC;
@@ -425,6 +426,7 @@ export async function extractPdfTextDetailed(
             // Disable features we don't need for text extraction
             disableFontFace: true,
             useSystemFonts: false,
+            standardFontDataUrl: STANDARD_FONTS_URL,
         });
 
         pdfDoc = await loadingTask.promise;
@@ -608,6 +610,7 @@ export async function validatePdf(file: File): Promise<{
         const loadingTask = pdfjsLib.getDocument({
             data: arrayBuffer,
             disableFontFace: true,
+            standardFontDataUrl: STANDARD_FONTS_URL,
         });
 
         const pdfDoc = await loadingTask.promise;
