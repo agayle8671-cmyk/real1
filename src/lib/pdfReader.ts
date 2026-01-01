@@ -21,8 +21,8 @@ import type {
  * Using CDN to avoid Vite/Webpack bundling issues with workers
  * Version should match the installed pdfjs-dist version
  */
-const PDFJS_VERSION = '4.0.379';
-const WORKER_SRC = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
+const PDFJS_VERSION = '5.4.530'; // Must match installed pdfjs-dist version
+const WORKER_SRC = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`;
 
 // Configure the worker source
 pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_SRC;
