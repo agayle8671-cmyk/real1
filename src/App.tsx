@@ -7,7 +7,7 @@ import {
     ArrowDown, ArrowUp,
     BarChart3, Bell, CheckCircle, ChevronRight,
     Clock, Database, DollarSign,
-    FileCheck, Layers, Mic, Scan, Server, Leaf,
+    FileCheck, Layers, Loader2, Mic, Scan, Server, Leaf,
     Settings, Shield, ShieldCheck, Target,
     Terminal, TrendingUp, Upload, User,
     Wifi, Zap, Building, Cpu,
@@ -16,6 +16,7 @@ import {
 import { scanFileContent, AnalyzedResult, formatCurrency as fmtCurrency } from './forensicEngine';
 import { supabase, Deal } from './lib/supabase';
 import extractPdfText from './lib/pdfReader';
+import { generateMarketBids, executeSale, MarketBid, formatBidAmount, getTierColor, getTierBadge } from './lib/arbitrageFloor';
 import PublicLanding from './PublicLanding';
 
 interface FinancialRow {
@@ -45,14 +46,7 @@ interface Lead {
     timestamp: Date;
 }
 
-interface Bid {
-    id: string;
-    firm: string;
-    leadId: string;
-    amount: number;
-    timestamp: Date;
-    status: 'pending' | 'accepted' | 'rejected';
-}
+// Bid interface removed - now using MarketBid from arbitrageFloor
 
 interface LogEntry {
     id: string;
@@ -578,54 +572,95 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
     );
 };
 
-const ArbitrageFloor: React.FC = () => {
-    const [bids, setBids] = useState<Bid[]>([]);
-    const firms = ['Deloitte', 'EY', 'KPMG', 'PwC', 'BDO', 'RSM'];
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setBids(prev => [{ id: Date.now().toString(), firm: firms[Math.floor(Math.random() * firms.length)], leadId: `#${Math.floor(Math.random() * 1000) + 800}`, amount: Math.floor(800 + Math.random() * 800), timestamp: new Date(), status: Math.random() > 0.3 ? 'pending' : 'accepted' }, ...prev.slice(0, 9)]);
-        }, 3000);
-        return () => clearInterval(interval);
-    }, []);
+interface ArbitrageFloorProps {
+    bids: MarketBid[];
+    selectedDeal: Lead | null;
+    onSell: (bid: MarketBid) => void;
+    totalVolume: number;
+}
+
+const ArbitrageFloor: React.FC<ArbitrageFloorProps> = ({ bids, selectedDeal, onSell, totalVolume }) => {
+    const [selling, setSelling] = useState<string | null>(null);
+
+    const handleSell = async (bid: MarketBid) => {
+        setSelling(bid.id);
+        await new Promise(r => setTimeout(r, 800)); // Simulate processing
+        onSell(bid);
+        setSelling(null);
+    };
 
     return (
         <div className="flex flex-col h-full bg-slate-900 border-l border-slate-700">
             <div className="px-2 py-1 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
                 <div className="flex items-center gap-2"><BarChart3 className="w-4 h-4 text-emerald-400" /><span className="text-xs font-bold text-white tracking-wider">ARBITRAGE FLOOR</span></div>
-                <div className="flex items-center gap-1"><Circle className="w-2 h-2 fill-emerald-500 text-emerald-500 animate-pulse" /><span className="text-[9px] text-emerald-400 font-mono">OPEN</span></div>
+                <div className="flex items-center gap-1"><Circle className="w-2 h-2 fill-emerald-500 text-emerald-500 animate-pulse" /><span className="text-[9px] text-emerald-400 font-mono">LIVE</span></div>
             </div>
             <div className="grid grid-cols-3 gap-px bg-slate-700 border-b border-slate-700">
-                <div className="bg-slate-800 p-2 text-center"><div className="text-[9px] text-slate-500">VOLUME</div><div className="text-sm font-bold text-emerald-400 font-mono">$847K</div></div>
-                <div className="bg-slate-800 p-2 text-center"><div className="text-[9px] text-slate-500">AVG</div><div className="text-sm font-bold text-white font-mono">$1,124</div></div>
-                <div className="bg-slate-800 p-2 text-center"><div className="text-[9px] text-slate-500">SPREAD</div><div className="text-sm font-bold text-cyan-400 font-mono">840%</div></div>
+                <div className="bg-slate-800 p-2 text-center"><div className="text-[9px] text-slate-500">VOLUME</div><div className="text-sm font-bold text-emerald-400 font-mono">{formatBidAmount(totalVolume)}</div></div>
+                <div className="bg-slate-800 p-2 text-center"><div className="text-[9px] text-slate-500">BIDS</div><div className="text-sm font-bold text-white font-mono">{bids.length}</div></div>
+                <div className="bg-slate-800 p-2 text-center"><div className="text-[9px] text-slate-500">SPREAD</div><div className="text-sm font-bold text-cyan-400 font-mono">{bids.length > 0 ? `${Math.round(bids[0]?.metadata?.spreadPercentage || 0)}%` : '--'}</div></div>
             </div>
             <div className="flex-1 overflow-auto">
-                <table className="w-full text-[10px]">
-                    <thead className="sticky top-0 bg-slate-800"><tr className="border-b border-slate-700">
-                        <th className="px-2 py-1 text-left text-slate-500 font-mono">FIRM</th>
-                        <th className="px-2 py-1 text-right text-slate-500 font-mono">LEAD</th>
-                        <th className="px-2 py-1 text-right text-slate-500 font-mono">BID</th>
-                        <th className="px-2 py-1 text-center text-slate-500 font-mono">ST</th>
-                    </tr></thead>
-                    <tbody>{bids.map(bid => (
-                        <tr key={bid.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
-                            <td className="px-2 py-1 text-white">{bid.firm}</td>
-                            <td className="px-2 py-1 text-right text-slate-400 font-mono">{bid.leadId}</td>
-                            <td className="px-2 py-1 text-right text-emerald-400 font-mono font-bold">${bid.amount}</td>
-                            <td className="px-2 py-1 text-center">{bid.status === 'accepted' ? <span className="text-[8px] px-1 bg-emerald-900/50 text-emerald-400 rounded">SOLD</span> : <span className="text-[8px] px-1 bg-amber-900/50 text-amber-400 rounded">OPEN</span>}</td>
-                        </tr>
-                    ))}</tbody>
-                </table>
+                {!selectedDeal ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-4">
+                        <Database className="w-8 h-8 text-slate-600 mb-2" />
+                        <div className="text-[10px] text-slate-500 font-mono">MARKET STANDBY</div>
+                        <div className="text-[9px] text-slate-600 font-mono mt-1">SELECT INVENTORY TO GENERATE BIDS</div>
+                    </div>
+                ) : bids.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-4">
+                        <Loader2 className="w-6 h-6 text-cyan-400 animate-spin mb-2" />
+                        <div className="text-[10px] text-slate-400 font-mono">GENERATING BIDS...</div>
+                    </div>
+                ) : (
+                    <div className="p-2 space-y-1">
+                        {bids.map((bid, idx) => (
+                            <div key={bid.id} className={`p-2 rounded border ${idx === 0 ? 'bg-emerald-900/20 border-emerald-700/50' : 'bg-slate-800/50 border-slate-700/50'} hover:bg-slate-800`}>
+                                <div className="flex items-center justify-between mb-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-[8px] px-1 py-0.5 rounded ${getTierColor(bid.firmTier)} bg-slate-800`}>{getTierBadge(bid.firmTier)}</span>
+                                        <span className="text-white text-[11px] font-medium">{bid.firmName}</span>
+                                    </div>
+                                    {idx === 0 && <span className="text-[7px] px-1 py-0.5 bg-emerald-500 text-white rounded font-bold">TOP BID</span>}
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="text-emerald-400 font-mono font-bold text-sm">{formatBidAmount(bid.bidAmount)}</div>
+                                        <div className="text-[8px] text-slate-500">{bid.bidPercentage}% • {bid.metadata.estimatedCloseTime}d close</div>
+                                    </div>
+                                    <button
+                                        onClick={() => handleSell(bid)}
+                                        disabled={selling !== null}
+                                        className={`px-3 py-1.5 text-[10px] font-bold rounded transition-all ${selling === bid.id
+                                            ? 'bg-amber-600 text-white cursor-wait'
+                                            : 'bg-red-600 hover:bg-red-500 text-white hover:scale-105'
+                                            }`}
+                                    >
+                                        {selling === bid.id ? 'SELLING...' : 'SELL'}
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
-            <div className="bg-slate-800 border-t border-slate-700 px-2 py-1 flex items-center gap-2">
-                <button className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded">PLACE BID</button>
-                <button className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white text-[10px] font-mono rounded">MARKET BUY</button>
-            </div>
+            {selectedDeal && bids.length > 0 && (
+                <div className="bg-slate-800 border-t border-slate-700 px-2 py-1.5 text-center">
+                    <div className="text-[9px] text-slate-400 font-mono">SELLING: <span className="text-white">{selectedDeal.company}</span></div>
+                    <div className="text-[8px] text-slate-500 font-mono">VALUE: {formatCurrency(selectedDeal.estValue)}</div>
+                </div>
+            )}
         </div>
     );
 };
 
-const LeadGrid: React.FC<{ vaultDeals: Deal[] }> = ({ vaultDeals }) => {
+interface LeadGridProps {
+    vaultDeals: Deal[];
+    selectedId: string | null;
+    onSelectLead: (lead: Lead) => void;
+}
+
+const LeadGrid: React.FC<LeadGridProps> = ({ vaultDeals, selectedId, onSelectLead }) => {
     // Combine static leads with vault deals
     const staticLeads: Lead[] = [
         { id: 'L-48291', company: 'NexGen Tech', ein: '82-4729103', sector: 'SaaS', eligibility: 94, estValue: 234500, stage: 4, priority: 'critical', timestamp: new Date() },
@@ -643,6 +678,7 @@ const LeadGrid: React.FC<{ vaultDeals: Deal[] }> = ({ vaultDeals }) => {
         stage: d.status === 'VERIFIED' ? 5 : 4,
         priority: d.value > 200000 ? 'critical' : d.value > 100000 ? 'high' : 'medium',
         timestamp: new Date(d.created_at || Date.now()),
+        dbId: d.id, // Store original DB id for sale execution
     }));
 
     const leads = [...vaultLeads, ...staticLeads];
@@ -655,10 +691,11 @@ const LeadGrid: React.FC<{ vaultDeals: Deal[] }> = ({ vaultDeals }) => {
                 <span className="text-xs font-bold text-white tracking-wider">ACTIVE PIPELINE</span>
                 <span className="text-[9px] px-2 py-0.5 bg-amber-900/50 text-amber-400 rounded font-mono">{leads.length}</span>
                 {vaultDeals.length > 0 && <span className="text-[8px] px-1 py-0.5 bg-emerald-900/50 text-emerald-400 rounded font-mono ml-1">VAULT: {vaultDeals.length}</span>}
+                <span className="text-[8px] text-slate-500 ml-auto">CLICK TO SELECT</span>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[140px]">
                 <table className="w-full text-[10px]">
-                    <thead className="bg-slate-800"><tr className="border-b border-slate-700">
+                    <thead className="bg-slate-800 sticky top-0"><tr className="border-b border-slate-700">
                         <th className="px-3 py-1.5 text-left text-slate-400 font-mono">ID</th>
                         <th className="px-3 py-1.5 text-left text-slate-400 font-mono">COMPANY</th>
                         <th className="px-3 py-1.5 text-center text-slate-400 font-mono">ELIG</th>
@@ -667,7 +704,14 @@ const LeadGrid: React.FC<{ vaultDeals: Deal[] }> = ({ vaultDeals }) => {
                         <th className="px-3 py-1.5 text-center text-slate-400 font-mono">PRIO</th>
                     </tr></thead>
                     <tbody>{leads.map(lead => (
-                        <tr key={lead.id} className="border-b border-slate-800 hover:bg-slate-800/50">
+                        <tr
+                            key={lead.id}
+                            onClick={() => onSelectLead(lead)}
+                            className={`border-b border-slate-800 cursor-pointer transition-colors ${selectedId === lead.id
+                                ? 'bg-cyan-900/30 ring-1 ring-cyan-500/50 ring-inset'
+                                : 'hover:bg-slate-800/50'
+                                }`}
+                        >
                             <td className="px-3 py-1.5 text-cyan-400 font-mono font-bold">{lead.id}</td>
                             <td className="px-3 py-1.5 text-white">{lead.company}</td>
                             <td className="px-3 py-1.5 text-center"><div className="flex items-center justify-center gap-1"><div className="w-10 h-1.5 bg-slate-700 rounded-full overflow-hidden"><div className={`h-full rounded-full ${lead.eligibility >= 90 ? 'bg-emerald-500' : 'bg-cyan-500'}`} style={{ width: `${lead.eligibility}%` }} /></div><span className="text-white font-mono">{lead.eligibility}%</span></div></td>
@@ -688,6 +732,12 @@ function TerminalApp() {
     const [vaultDeals, setVaultDeals] = useState<Deal[]>([]);
     const [vaultError, setVaultError] = useState<string | null>(null);
 
+    // Marketplace state
+    const [selectedDeal, setSelectedDeal] = useState<Lead | null>(null);
+    const [activeBids, setActiveBids] = useState<MarketBid[]>([]);
+    const [totalVolume, setTotalVolume] = useState(847000); // Starting volume
+    const [saleToast, setSaleToast] = useState<string | null>(null);
+
     // Fetch existing deals from Supabase on load
     useEffect(() => {
         const fetchDeals = async () => {
@@ -702,6 +752,60 @@ function TerminalApp() {
         };
         fetchDeals();
     }, []);
+
+    // Handle lead selection - generate bids
+    const handleSelectLead = (lead: Lead) => {
+        console.log(`[MARKET] Selected lead: ${lead.company} (${lead.id})`);
+        setSelectedDeal(lead);
+        setActiveBids([]); // Clear old bids
+
+        // Generate new bids after a brief delay
+        setTimeout(() => {
+            const bids = generateMarketBids(lead.estValue, {
+                dealId: lead.id,
+                costBasis: lead.estValue * 0.008,
+            });
+            setActiveBids(bids);
+            console.log(`[MARKET] Generated ${bids.length} bids for ${lead.company}`);
+        }, 600);
+    };
+
+    // Handle sale execution
+    const handleSell = async (bid: MarketBid) => {
+        if (!selectedDeal) return;
+
+        console.log(`[SALE] Executing sale to ${bid.firmName} for $${bid.bidAmount}`);
+
+        // Get the database ID if this is a vault deal
+        const dbId = (selectedDeal as Lead & { dbId?: number }).dbId;
+
+        if (dbId) {
+            // Execute real sale in database
+            const result = await executeSale(dbId, bid.firmName, bid.bidAmount);
+            if (result.success) {
+                console.log(`[SALE] Transaction ${result.transactionId} complete!`);
+                // Remove from vault deals
+                setVaultDeals(prev => prev.filter(d => d.id !== dbId));
+            } else {
+                console.error(`[SALE] Failed: ${result.error}`);
+            }
+        }
+
+        // Update volume ticker
+        setTotalVolume(prev => prev + bid.bidAmount);
+
+        // Show toast
+        setSaleToast(`SOLD TO ${bid.firmName.toUpperCase()} FOR ${formatBidAmount(bid.bidAmount)}`);
+        setTimeout(() => setSaleToast(null), 4000);
+
+        // Clear selection
+        setSelectedDeal(null);
+        setActiveBids([]);
+
+        // Flash dashboard
+        setDashboardFlash(true);
+        setTimeout(() => setDashboardFlash(false), 1500);
+    };
 
     const handleAnalysisComplete = async (result: AnalyzedResult) => {
         setActiveResult(result);
@@ -733,17 +837,25 @@ function TerminalApp() {
     return (
         <div className={`h-screen w-screen bg-slate-950 flex flex-col overflow-hidden transition-all duration-300 ${dashboardFlash ? 'ring-4 ring-emerald-500/30 ring-inset' : ''}`}>
             <GlobalCommandHeader />
+
+            {/* Sale Toast */}
+            {saleToast && (
+                <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-emerald-600 text-white text-sm font-bold rounded-lg shadow-2xl shadow-emerald-500/30 animate-pulse">
+                    ✓ {saleToast}
+                </div>
+            )}
+
             <div className="flex-1 flex overflow-hidden">
                 <div className="w-[340px] flex-shrink-0"><UnderwritingMatrix result={activeResult} /></div>
                 <div className="flex-1 flex flex-col overflow-hidden">
-                    <div className="flex-shrink-0"><LeadGrid vaultDeals={vaultDeals} /></div>
+                    <div className="flex-shrink-0"><LeadGrid vaultDeals={vaultDeals} selectedId={selectedDeal?.id || null} onSelectLead={handleSelectLead} /></div>
                     <div className="flex-1 grid grid-cols-2 gap-px bg-slate-700 overflow-hidden">
                         <div className="bg-slate-900 p-2"><div className="flex items-center gap-1 mb-2"><TrendingUp className="w-3 h-3 text-emerald-400" /><span className="text-[10px] font-bold text-white">VELOCITY</span></div><div className="h-32"><ResponsiveContainer width="100%" height="100%"><AreaChart data={Array.from({ length: 24 }, (_, i) => ({ h: i, v: 80 + Math.random() * 60 }))}><defs><linearGradient id="vg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs><XAxis dataKey="h" tick={{ fontSize: 8 }} stroke="#475569" /><YAxis tick={{ fontSize: 8 }} stroke="#475569" /><Area type="monotone" dataKey="v" stroke="#10b981" fill="url(#vg)" strokeWidth={2} /></AreaChart></ResponsiveContainer></div></div>
                         <div className="bg-slate-900 p-2"><div className="flex items-center gap-1 mb-2"><Target className="w-3 h-3 text-amber-400" /><span className="text-[10px] font-bold text-white">CONVERSION</span></div><div className="h-32 flex flex-col justify-center gap-1">{[{ s: 'INGEST', v: 1247, p: 100 }, { s: 'QUALIFY', v: 892, p: 71 }, { s: 'VERIFY', v: 634, p: 51 }, { s: 'SOLD', v: 342, p: 27 }].map(i => <div key={i.s} className="flex items-center gap-2"><span className="text-[8px] text-slate-500 w-10 font-mono">{i.s}</span><div className="flex-1 h-2.5 bg-slate-800 rounded overflow-hidden"><div className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 rounded" style={{ width: `${i.p}%` }} /></div><span className="text-[9px] text-white font-mono w-8 text-right">{i.v}</span></div>)}</div></div>
                     </div>
                     <div className="h-[180px] flex-shrink-0 border-t border-slate-700"><VerificationGauntlet onAnalysisComplete={handleAnalysisComplete} /></div>
                 </div>
-                <div className="w-[280px] flex-shrink-0"><ArbitrageFloor /></div>
+                <div className="w-[280px] flex-shrink-0"><ArbitrageFloor bids={activeBids} selectedDeal={selectedDeal} onSell={handleSell} totalVolume={totalVolume} /></div>
             </div>
             <footer className="bg-slate-900 border-t border-slate-700 px-3 py-1 flex items-center justify-between">
                 <div className="flex items-center gap-4 text-[9px] font-mono">
@@ -752,9 +864,10 @@ function TerminalApp() {
                     {activeResult?.isRdEligible && <span className="text-cyan-400">R&D: ELIGIBLE</span>}
                     {vaultError && <span className="text-red-400">{vaultError}</span>}
                     <span className="text-cyan-400">VAULT: {vaultDeals.length} DEALS</span>
+                    <span className="text-emerald-400">VOLUME: {formatBidAmount(totalVolume)}</span>
                     <span className="text-slate-500">UPTIME: <span className="text-white">99.97%</span></span>
                 </div>
-                <div className="text-[9px] font-mono text-slate-500">© 2024 GRANTFLOW</div>
+                <div className="text-[9px] font-mono text-slate-500">© 2026 GRANTFLOW</div>
             </footer>
         </div>
     );
