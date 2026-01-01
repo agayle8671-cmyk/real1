@@ -1,0 +1,1424 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LaunchStack Console</title>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: #f8f9fa;
+            color: #202124;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* Top Header */
+        .top-header {
+            height: 64px;
+            background: #1a73e8;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .menu-btn {
+            width: 48px;
+            height: 48px;
+            border: none;
+            background: transparent;
+            color: white;
+            cursor: pointer;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .menu-btn:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+        }
+
+        .logo:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: white;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #1a73e8;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .logo-text {
+            font-family: 'Google Sans', sans-serif;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .project-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.15);
+            padding: 8px 16px;
+            border-radius: 4px;
+            margin-left: 24px;
+            cursor: pointer;
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .project-selector:hover {
+            background: rgba(255,255,255,0.25);
+        }
+
+        .project-selector span {
+            font-size: 14px;
+        }
+
+        .header-search {
+            flex: 1;
+            max-width: 720px;
+            margin: 0 24px;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            background: rgba(255,255,255,0.15);
+            border-radius: 8px;
+            padding: 0 16px;
+            height: 46px;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .search-box:focus-within {
+            background: white;
+            border-color: #dadce0;
+        }
+
+        .search-box:focus-within input {
+            color: #202124;
+        }
+
+        .search-box:focus-within input::placeholder {
+            color: #5f6368;
+        }
+
+        .search-box:focus-within .material-icons {
+            color: #5f6368;
+        }
+
+        .search-box .material-icons {
+            color: rgba(255,255,255,0.8);
+            font-size: 20px;
+        }
+
+        .search-box input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            outline: none;
+            font-size: 16px;
+            color: white;
+            margin-left: 12px;
+        }
+
+        .search-box input::placeholder {
+            color: rgba(255,255,255,0.7);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .header-icon-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: transparent;
+            color: white;
+            cursor: pointer;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .header-icon-btn:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #34a853;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 500;
+            margin-left: 8px;
+            cursor: pointer;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 256px;
+            background: white;
+            position: fixed;
+            top: 64px;
+            left: 0;
+            bottom: 0;
+            border-right: 1px solid #dadce0;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        .sidebar-section {
+            padding: 8px 0;
+            border-bottom: 1px solid #e8eaed;
+        }
+
+        .sidebar-section:last-child {
+            border-bottom: none;
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            height: 40px;
+            color: #202124;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .sidebar-item:hover {
+            background: #f1f3f4;
+        }
+
+        .sidebar-item.active {
+            background: #e8f0fe;
+            color: #1a73e8;
+        }
+
+        .sidebar-item.active .material-icons {
+            color: #1a73e8;
+        }
+
+        .sidebar-item .material-icons {
+            font-size: 20px;
+            color: #5f6368;
+            margin-right: 16px;
+        }
+
+        .sidebar-item span {
+            font-size: 14px;
+        }
+
+        .sidebar-header {
+            padding: 16px 24px 8px;
+            font-size: 11px;
+            font-weight: 500;
+            color: #5f6368;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .pin-icon {
+            margin-left: auto;
+            opacity: 0;
+            color: #5f6368;
+            font-size: 18px !important;
+        }
+
+        .sidebar-item:hover .pin-icon {
+            opacity: 1;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 256px;
+            margin-top: 64px;
+            min-height: calc(100vh - 64px);
+        }
+
+        /* Page Header */
+        .page-header {
+            background: white;
+            border-bottom: 1px solid #dadce0;
+            padding: 24px 32px 0;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #5f6368;
+            margin-bottom: 8px;
+        }
+
+        .breadcrumb a {
+            color: #1a73e8;
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .page-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+
+        .page-title {
+            font-family: 'Google Sans', sans-serif;
+            font-size: 28px;
+            font-weight: 400;
+            color: #202124;
+        }
+
+        .page-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 8px 24px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #1a73e8;
+            color: white;
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background: #1557b0;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #1a73e8;
+            border: 1px solid #dadce0;
+        }
+
+        .btn-secondary:hover {
+            background: #f8f9fa;
+            border-color: #1a73e8;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            color: #5f6368;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: #1a73e8;
+            background: #f8f9fa;
+        }
+
+        .tab.active {
+            color: #1a73e8;
+            border-bottom-color: #1a73e8;
+        }
+
+        /* Content Area */
+        .content-area {
+            padding: 24px 32px;
+        }
+
+        /* Info Banner */
+        .info-banner {
+            background: #e8f0fe;
+            border: 1px solid #aecbfa;
+            border-radius: 4px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .info-banner .material-icons {
+            color: #1a73e8;
+            font-size: 20px;
+        }
+
+        .info-banner-content {
+            flex: 1;
+        }
+
+        .info-banner-content p {
+            color: #202124;
+            font-size: 14px;
+        }
+
+        .info-banner-content a {
+            color: #1a73e8;
+            text-decoration: none;
+        }
+
+        .info-banner-content a:hover {
+            text-decoration: underline;
+        }
+
+        .info-banner-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #5f6368;
+            padding: 4px;
+        }
+
+        /* Resource Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .resource-card {
+            background: white;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            padding: 20px;
+            transition: box-shadow 0.2s;
+            cursor: pointer;
+        }
+
+        .resource-card:hover {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+        }
+
+        .resource-card-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .resource-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .resource-icon.blue { background: #e8f0fe; color: #1a73e8; }
+        .resource-icon.green { background: #e6f4ea; color: #34a853; }
+        .resource-icon.orange { background: #fef7e0; color: #f9ab00; }
+        .resource-icon.red { background: #fce8e6; color: #ea4335; }
+        .resource-icon.purple { background: #f3e8fd; color: #a142f4; }
+        .resource-icon.teal { background: #e4f7fb; color: #12b5cb; }
+
+        .resource-card-title {
+            font-family: 'Google Sans', sans-serif;
+            font-size: 16px;
+            font-weight: 500;
+            color: #202124;
+        }
+
+        .resource-card-desc {
+            font-size: 14px;
+            color: #5f6368;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        .resource-card-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 16px;
+            border-top: 1px solid #e8eaed;
+        }
+
+        .resource-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-indicator.active { background: #34a853; }
+        .status-indicator.warning { background: #f9ab00; }
+        .status-indicator.inactive { background: #dadce0; }
+
+        .resource-link {
+            color: #1a73e8;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+        }
+
+        .resource-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Data Table */
+        .table-container {
+            background: white;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e8eaed;
+        }
+
+        .table-title {
+            font-family: 'Google Sans', sans-serif;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .table-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .table-search {
+            display: flex;
+            align-items: center;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            padding: 6px 12px;
+            gap: 8px;
+        }
+
+        .table-search input {
+            border: none;
+            outline: none;
+            font-size: 14px;
+            width: 200px;
+        }
+
+        .table-search .material-icons {
+            color: #5f6368;
+            font-size: 20px;
+        }
+
+        .icon-btn-small {
+            width: 36px;
+            height: 36px;
+            border: 1px solid #dadce0;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #5f6368;
+        }
+
+        .icon-btn-small:hover {
+            background: #f1f3f4;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px 20px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #5f6368;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e8eaed;
+        }
+
+        td {
+            padding: 16px 20px;
+            font-size: 14px;
+            border-bottom: 1px solid #e8eaed;
+            color: #202124;
+        }
+
+        tr:hover td {
+            background: #f8f9fa;
+        }
+
+        .table-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .resource-name {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .resource-name-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .resource-name a {
+            color: #1a73e8;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .resource-name a:hover {
+            text-decoration: underline;
+        }
+
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-chip.running {
+            background: #e6f4ea;
+            color: #137333;
+        }
+
+        .status-chip.stopped {
+            background: #f1f3f4;
+            color: #5f6368;
+        }
+
+        .status-chip.pending {
+            background: #fef7e0;
+            color: #b06000;
+        }
+
+        .region-text {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .region-flag {
+            font-size: 16px;
+        }
+
+        .actions-menu {
+            color: #5f6368;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 50%;
+        }
+
+        .actions-menu:hover {
+            background: #e8eaed;
+        }
+
+        /* Section Headers */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-family: 'Google Sans', sans-serif;
+            font-size: 18px;
+            font-weight: 500;
+            color: #202124;
+        }
+
+        /* Quick Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: white;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #5f6368;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-family: 'Google Sans', sans-serif;
+            font-size: 28px;
+            font-weight: 400;
+            color: #202124;
+            margin-bottom: 4px;
+        }
+
+        .stat-change {
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .stat-change.up { color: #34a853; }
+        .stat-change.down { color: #ea4335; }
+
+        /* Billing Section */
+        .billing-card {
+            background: white;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .billing-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .billing-amount {
+            font-family: 'Google Sans', sans-serif;
+            font-size: 36px;
+            color: #202124;
+        }
+
+        .billing-period {
+            font-size: 14px;
+            color: #5f6368;
+        }
+
+        .billing-bar {
+            height: 8px;
+            background: #e8eaed;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .billing-bar-fill {
+            height: 100%;
+            background: #1a73e8;
+            border-radius: 4px;
+        }
+
+        .billing-breakdown {
+            display: flex;
+            gap: 24px;
+        }
+
+        .billing-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #5f6368;
+        }
+
+        .billing-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        .billing-dot.compute { background: #1a73e8; }
+        .billing-dot.storage { background: #34a853; }
+        .billing-dot.network { background: #f9ab00; }
+        .billing-dot.other { background: #ea4335; }
+
+        /* Footer */
+        .console-footer {
+            background: #f8f9fa;
+            border-top: 1px solid #dadce0;
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #5f6368;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 24px;
+        }
+
+        .footer-links a {
+            color: #5f6368;
+            text-decoration: none;
+        }
+
+        .footer-links a:hover {
+            color: #202124;
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Header -->
+    <header class="top-header">
+        <div class="header-left">
+            <button class="menu-btn">
+                <span class="material-icons">menu</span>
+            </button>
+            <a href="#" class="logo">
+                <div class="logo-icon">L</div>
+                <span class="logo-text">LaunchStack</span>
+            </a>
+            <div class="project-selector">
+                <span class="material-icons" style="font-size: 18px;">folder</span>
+                <span>TechVenture-Startup</span>
+                <span class="material-icons" style="font-size: 18px;">arrow_drop_down</span>
+            </div>
+        </div>
+        
+        <div class="header-search">
+            <div class="search-box">
+                <span class="material-icons">search</span>
+                <input type="text" placeholder="Search resources, docs, and more">
+            </div>
+        </div>
+        
+        <div class="header-right">
+            <button class="header-icon-btn">
+                <span class="material-icons">terminal</span>
+            </button>
+            <button class="header-icon-btn">
+                <span class="material-icons">notifications</span>
+            </button>
+            <button class="header-icon-btn">
+                <span class="material-icons">help_outline</span>
+            </button>
+            <button class="header-icon-btn">
+                <span class="material-icons">apps</span>
+            </button>
+            <div class="user-avatar">JD</div>
+        </div>
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-section">
+            <a class="sidebar-item active">
+                <span class="material-icons">home</span>
+                <span>Home</span>
+            </a>
+            <a class="sidebar-item">
+                <span class="material-icons">dashboard</span>
+                <span>Dashboard</span>
+            </a>
+            <a class="sidebar-item">
+                <span class="material-icons">receipt_long</span>
+                <span>Billing</span>
+            </a>
+            <a class="sidebar-item">
+                <span class="material-icons">settings</span>
+                <span>Settings</span>
+            </a>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-header">Compute</div>
+            <a class="sidebar-item">
+                <span class="material-icons">dns</span>
+                <span>Virtual Machines</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+            <a class="sidebar-item">
+                <span class="material-icons">view_in_ar</span>
+                <span>Kubernetes Clusters</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+            <a class="sidebar-item">
+                <span class="material-icons">bolt</span>
+                <span>Serverless Functions</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-header">Storage</div>
+            <a class="sidebar-item">
+                <span class="material-icons">inventory_2</span>
+                <span>Object Storage</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+            <a class="sidebar-item">
+                <span class="material-icons">storage</span>
+                <span>Block Storage</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+            <a class="sidebar-item">
+                <span class="material-icons">folder_shared</span>
+                <span>File Storage</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-header">Databases</div>
+            <a class="sidebar-item">
+                <span class="material-icons">database</span>
+                <span>SQL Databases</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+            <a class="sidebar-item">
+                <span class="material-icons">scatter_plot</span>
+                <span>NoSQL</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+            <a class="sidebar-item">
+                <span class="material-icons">cached</span>
+                <span>Redis Cache</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-header">Startup Tools</div>
+            <a class="sidebar-item">
+                <span class="material-icons">trending_up</span>
+                <span>Analytics</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+            <a class="sidebar-item">
+                <span class="material-icons">account_balance</span>
+                <span>Funding Tracker</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+            <a class="sidebar-item">
+                <span class="material-icons">groups</span>
+                <span>Investor CRM</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-header">Networking</div>
+            <a class="sidebar-item">
+                <span class="material-icons">lan</span>
+                <span>VPC Networks</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+            <a class="sidebar-item">
+                <span class="material-icons">public</span>
+                <span>Load Balancing</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+            <a class="sidebar-item">
+                <span class="material-icons">security</span>
+                <span>Firewall</span>
+                <span class="material-icons pin-icon">push_pin</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="breadcrumb">
+                <a href="#">TechVenture-Startup</a>
+                <span class="material-icons" style="font-size: 16px;">chevron_right</span>
+                <span>Home</span>
+            </div>
+            <div class="page-title-row">
+                <h1 class="page-title">Project Dashboard</h1>
+                <div class="page-actions">
+                    <button class="btn btn-secondary">
+                        <span class="material-icons" style="font-size: 18px;">download</span>
+                        Export
+                    </button>
+                    <button class="btn btn-primary">
+                        <span class="material-icons" style="font-size: 18px;">add</span>
+                        Create Resource
+                    </button>
+                </div>
+            </div>
+            <nav class="tabs">
+                <a href="#" class="tab active">Overview</a>
+                <a href="#" class="tab">Resources</a>
+                <a href="#" class="tab">Activity</a>
+                <a href="#" class="tab">Recommendations</a>
+                <a href="#" class="tab">Settings</a>
+            </nav>
+        </div>
+
+        <!-- Content Area -->
+        <div class="content-area">
+            <!-- Info Banner -->
+            <div class="info-banner">
+                <span class="material-icons">info</span>
+                <div class="info-banner-content">
+                    <p><strong>Welcome to LaunchStack!</strong> Complete your startup setup to unlock $10,000 in credits. <a href="#">Complete setup →</a></p>
+                </div>
+                <button class="info-banner-close">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+
+            <!-- Stats Row -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-label">Active Resources</div>
+                    <div class="stat-value">24</div>
+                    <div class="stat-change up">
+                        <span class="material-icons" style="font-size: 16px;">arrow_upward</span>
+                        3 from last week
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Monthly Spend</div>
+                    <div class="stat-value">$1,847</div>
+                    <div class="stat-change down">
+                        <span class="material-icons" style="font-size: 16px;">arrow_downward</span>
+                        12% from last month
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">API Requests</div>
+                    <div class="stat-value">2.4M</div>
+                    <div class="stat-change up">
+                        <span class="material-icons" style="font-size: 16px;">arrow_upward</span>
+                        18% from last week
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Team Members</div>
+                    <div class="stat-value">8</div>
+                    <div class="stat-change up">
+                        <span class="material-icons" style="font-size: 16px;">arrow_upward</span>
+                        2 new this month
+                    </div>
+                </div>
+            </div>
+
+            <!-- Billing Overview -->
+            <div class="billing-card">
+                <div class="billing-header">
+                    <div>
+                        <div class="billing-amount">$1,847.32</div>
+                        <div class="billing-period">Current month to date • Forecasted: $2,450</div>
+                    </div>
+                    <a href="#" class="resource-link">View billing details →</a>
+                </div>
+                <div class="billing-bar">
+                    <div class="billing-bar-fill" style="width: 65%;"></div>
+                </div>
+                <div class="billing-breakdown">
+                    <div class="billing-item">
+                        <span class="billing-dot compute"></span>
+                        Compute: $892.45
+                    </div>
+                    <div class="billing-item">
+                        <span class="billing-dot storage"></span>
+                        Storage: $423.12
+                    </div>
+                    <div class="billing-item">
+                        <span class="billing-dot network"></span>
+                        Network: $312.80
+                    </div>
+                    <div class="billing-item">
+                        <span class="billing-dot other"></span>
+                        Other: $218.95
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Access Cards -->
+            <div class="section-header">
+                <h2 class="section-title">Quick Access</h2>
+                <a href="#" class="resource-link">View all products →</a>
+            </div>
+
+            <div class="cards-grid">
+                <div class="resource-card">
+                    <div class="resource-card-header">
+                        <div class="resource-icon blue">
+                            <span class="material-icons">dns</span>
+                        </div>
+                        <div class="resource-card-title">Virtual Machines</div>
+                    </div>
+                    <p class="resource-card-desc">Create and manage scalable virtual machine instances for your workloads.</p>
+                    <div class="resource-card-meta">
+                        <div class="resource-status">
+                            <span class="status-indicator active"></span>
+                            <span>6 instances running</span>
+                        </div>
+                        <a href="#" class="resource-link">Manage</a>
+                    </div>
+                </div>
+
+                <div class="resource-card">
+                    <div class="resource-card-header">
+                        <div class="resource-icon green">
+                            <span class="material-icons">database</span>
+                        </div>
+                        <div class="resource-card-title">SQL Database</div>
+                    </div>
+                    <p class="resource-card-desc">Fully managed relational database service for PostgreSQL and MySQL.</p>
+                    <div class="resource-card-meta">
+                        <div class="resource-status">
+                            <span class="status-indicator active"></span>
+                            <span>3 instances running</span>
+                        </div>
+                        <a href="#" class="resource-link">Manage</a>
+                    </div>
+                </div>
+
+                <div class="resource-card">
+                    <div class="resource-card-header">
+                        <div class="resource-icon orange">
+                            <span class="material-icons">inventory_2</span>
+                        </div>
+                        <div class="resource-card-title">Object Storage</div>
+                    </div>
+                    <p class="resource-card-desc">Store and serve any amount of data with high availability.</p>
+                    <div class="resource-card-meta">
+                        <div class="resource-status">
+                            <span class="status-indicator active"></span>
+                            <span>847 GB stored</span>
+                        </div>
+                        <a href="#" class="resource-link">Manage</a>
+                    </div>
+                </div>
+
+                <div class="resource-card">
+                    <div class="resource-card-header">
+                        <div class="resource-icon purple">
+                            <span class="material-icons">bolt</span>
+                        </div>
+                        <div class="resource-card-title">Serverless Functions</div>
+                    </div>
+                    <p class="resource-card-desc">Run code without provisioning servers. Pay only for execution time.</p>
+                    <div class="resource-card-meta">
+                        <div class="resource-status">
+                            <span class="status-indicator active"></span>
+                            <span>12 functions deployed</span>
+                        </div>
+                        <a href="#" class="resource-link">Manage</a>
+                    </div>
+                </div>
+
+                <div class="resource-card">
+                    <div class="resource-card-header">
+                        <div class="resource-icon teal">
+                            <span class="material-icons">trending_up</span>
+                        </div>
+                        <div class="resource-card-title">Startup Analytics</div>
+                    </div>
+                    <p class="resource-card-desc">Track KPIs, user metrics, and generate investor-ready reports.</p>
+                    <div class="resource-card-meta">
+                        <div class="resource-status">
+                            <span class="status-indicator active"></span>
+                            <span>Dashboard active</span>
+                        </div>
+                        <a href="#" class="resource-link">View</a>
+                    </div>
+                </div>
+
+                <div class="resource-card">
+                    <div class="resource-card-header">
+                        <div class="resource-icon red">
+                            <span class="material-icons">account_balance</span>
+                        </div>
+                        <div class="resource-card-title">Funding Tracker</div>
+                    </div>
+                    <p class="resource-card-desc">Manage funding rounds, cap tables, and investor communications.</p>
+                    <div class="resource-card-meta">
+                        <div class="resource-status">
+                            <span class="status-indicator warning"></span>
+                            <span>2 pending items</span>
+                        </div>
+                        <a href="#" class="resource-link">View</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resources Table -->
+            <div class="section-header">
+                <h2 class="section-title">Recent Resources</h2>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header">
+                    <div class="table-title">VM Instances</div>
+                    <div class="table-actions">
+                        <div class="table-search">
+                            <span class="material-icons">search</span>
+                            <input type="text" placeholder="Filter resources">
+                        </div>
+                        <button class="icon-btn-small">
+                            <span class="material-icons">refresh</span>
+                        </button>
+                        <button class="icon-btn-small">
+                            <span class="material-icons">view_column</span>
+                        </button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;"><input type="checkbox" class="table-checkbox"></th>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Zone</th>
+                            <th>Machine Type</th>
+                            <th>Internal IP</th>
+                            <th>Created</th>
+                            <th style="width: 40px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="checkbox" class="table-checkbox"></td>
+                            <td>
+                                <div class="resource-name">
+                                    <div class="resource-name-icon" style="background: #e8f0fe; color: #1a73e8;">
+                                        <span class="material-icons" style="font-size: 18px;">dns</span>
+                                    </div>
+                                    <a href="#">prod-api-server-1</a>
+                                </div>
+                            </td>
+                            <td><span class="status-chip running">● Running</span></td>
+                            <td>
+                                <div class="region-text">
+                                    <span class="region-flag">🇺🇸</span>
+                                    us-east1-b
+                                </div>
+                            </td>
+                            <td>n2-standard-4</td>
+                            <td>10.142.0.12</td>
+                            <td>Dec 1, 2024</td>
+                            <td><span class="material-icons actions-menu">more_vert</span></td>
+                        </tr>
+                        <tr>
+                            <td><input type="checkbox" class="table-checkbox"></td>
+                            <td>
+                                <div class="resource-name">
+                                    <div class="resource-name-icon" style="background: #e8f0fe; color: #1a73e8;">
+                                        <span class="material-icons" style="font-size: 18px;">dns</span>
+                                    </div>
+                                    <a href="#">prod-api-server-2</a>
+                                </div>
+                            </td>
+                            <td><span class="status-chip running">● Running</span></td>
+                            <td>
+                                <div class="region-text">
+                                    <span class="region-flag">🇺🇸</span>
+                                    us-east1-c
+                                </div>
+                            </td>
+                            <td>n2-standard-4</td>
+                            <td>10.142.0.15</td>
+                            <td>Dec 1, 2024</td>
+                            <td><span class="material-icons actions-menu">more_vert</span></td>
+                        </tr>
+                        <tr>
+                            <td><input type="checkbox" class="table-checkbox"></td>
+                            <td>
+                                <div class="resource-name">
+                                    <div class="resource-name-icon" style="background: #e8f0fe; color: #1a73e8;">
+                                        <span class="material-icons" style="font-size: 18px;">dns</span>
+                                    </div>
+                                    <a href="#">staging-web-server</a>
+                                </div>
+                            </td>
+                            <td><span class="status-chip running">● Running</span></td>
+                            <td>
+                                <div class="region-text">
+                                    <span class="region-flag">🇪🇺</span>
+                                    europe-west1-b
+                                </div>
+                            </td>
+                            <td>e2-medium</td>
+                            <td>10.132.0.8</td>
+                            <td>Nov 28, 2024</td>
+                            <td><span class="material-icons actions-menu">more_vert</span></td>
+                        </tr>
+                        <tr>
+                            <td><input type="checkbox" class="table-checkbox"></td>
+                            <td>
+                                <div class="resource-name">
+                                    <div class="resource-name-icon" style="background: #e8f0fe; color: #1a73e8;">
+                                        <span class="material-icons" style="font-size: 18px;">dns</span>
+                                    </div>
+                                    <a href="#">dev-test-instance</a>
+                                </div>
+                            </td>
+                            <td><span class="status-chip stopped">● Stopped</span></td>
+                            <td>
+                                <div class="region-text">
+                                    <span class="region-flag">🇺🇸</span>
+                                    us-central1-a
+                                </div>
+                            </td>
+                            <td>e2-small</td>
+                            <td>10.128.0.22</td>
+                            <td>Nov 15, 2024</td>
+                            <td><span class="material-icons actions-menu">more_vert</span></td>
+                        </tr>
+                        <tr>
+                            <td><input type="checkbox" class="table-checkbox"></td>
+                            <td>
+                                <div class="resource-name">
+                                    <div class="resource-name-icon" style="background: #e8f0fe; color: #1a73e8;">
+                                        <span class="material-icons" style="font-size: 18px;">dns</span>
+                                    </div>
+                                    <a href="#">ml-training-gpu</a>
+                                </div>
+                            </td>
+                            <td><span class="status-chip pending">● Provisioning</span></td>
+                            <td>
+                                <div class="region-text">
+                                    <span class="region-flag">🇺🇸</span>
+                                    us-west1-b
+                                </div>
+                            </td>
+                            <td>n1-standard-8-gpu</td>
+                            <td>—</td>
+                            <td>Just now</td>
+                            <td><span class="material-icons actions-menu">more_vert</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="console-footer">
+            <div class="footer-links">
+                <a href="#">Privacy</a>
+                <a href="#">Terms</a>
+                <a href="#">Documentation</a>
+                <a href="#">Support</a>
+                <a href="#">Send Feedback</a>
+            </div>
+            <div>© 2024 LaunchStack Inc.</div>
+        </footer>
+    </main>
+
+    <script>
+        // Simple tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', function(e) {
+                e.preventDefault();
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Sidebar item switching
+        document.querySelectorAll('.sidebar-item').forEach(item => {
+            item.addEventListener('click', function() {
+                document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Close info banner
+        document.querySelector('.info-banner-close').addEventListener('click', function() {
+            this.closest('.info-banner').style.display = 'none';
+        });
+    </script>
+</body>
+</html>

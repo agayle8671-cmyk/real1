@@ -7,13 +7,21 @@ export default {
     theme: {
         extend: {
             colors: {
-                'bg-console': '#F8F9FA',
-                'border-console': '#DADCE0',
-                'primary-blue': '#1A73E8',
+                slate: {
+                    850: '#172033',
+                    900: '#0f172a',
+                    950: '#020617',
+                },
+                emerald: {
+                    500: '#10b981',
+                },
+                amber: {
+                    500: '#f59e0b',
+                },
             },
             fontFamily: {
-                sans: ['Inter', 'system-ui', 'sans-serif'],
-            }
+                mono: ['"JetBrains Mono"', '"Fira Code"', 'Consolas', 'monospace'],
+            },
         },
     },
     plugins: [],
