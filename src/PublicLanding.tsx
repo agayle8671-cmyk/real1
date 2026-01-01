@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { scanFileContent, formatCurrency } from './forensicEngine';
+import extractPdfText from './lib/pdfReader';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -471,7 +472,15 @@ const PublicLanding: React.FC = () => {
         setError('');
 
         try {
-            const text = await file.text();
+            // Extract text from file (PDF or plain text)
+            let text: string;
+            if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                // PDF extraction
+                text = await extractPdfText(file);
+            } else {
+                // Plain text/CSV
+                text = await file.text();
+            }
 
             // Animate progress
             const interval = setInterval(() => {

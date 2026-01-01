@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { scanFileContent, AnalyzedResult, formatCurrency as fmtCurrency } from './forensicEngine';
 import { supabase, Deal } from './lib/supabase';
+import extractPdfText from './lib/pdfReader';
 import PublicLanding from './PublicLanding';
 
 interface FinancialRow {
@@ -282,8 +283,22 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
         setTimeout(() => setIngestFlash(false), 2000);
         setStageProgress(prev => [prev[0] + 1, ...prev.slice(1)]);
 
-        // READ THE ACTUAL FILE TEXT and run the rule-based scanner
-        const text = await file.text();
+        // READ THE ACTUAL FILE TEXT (PDF or plain text) and run the rule-based scanner
+        let text: string;
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+            // Use PDF extraction for PDF files
+            setLogs(prev => [...prev, {
+                id: `pdf-${Date.now()}`,
+                timestamp: new Date(),
+                level: 'info',
+                message: `>> [PDF] EXTRACTING TEXT FROM ${file.name.toUpperCase()}...`,
+                module: 'OCR',
+            }]);
+            text = await extractPdfText(file);
+        } else {
+            // Plain text or CSV
+            text = await file.text();
+        }
         const result = scanFileContent(text);
 
         // Log the scan result
@@ -905,8 +920,8 @@ export default function AppWithViewToggle() {
             <button
                 onClick={handleToggle}
                 className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-2 text-white text-sm font-bold rounded-lg shadow-lg transition-all hover:scale-105 ${viewMode === 'TERMINAL'
-                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-purple-500/30'
-                        : 'bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 shadow-red-500/30'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-purple-500/30'
+                    : 'bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 shadow-red-500/30'
                     }`}
             >
                 {viewMode === 'TERMINAL' ? (
