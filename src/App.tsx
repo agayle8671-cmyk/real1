@@ -784,11 +784,16 @@ function TerminalApp() {
             const result = await executeSale(dbId, bid.firmName, bid.bidAmount);
             if (result.success) {
                 console.log(`[SALE] Transaction ${result.transactionId} complete!`);
-                // Remove from vault deals
-                setVaultDeals(prev => prev.filter(d => d.id !== dbId));
             } else {
                 console.error(`[SALE] Failed: ${result.error}`);
+                return; // Don't update UI if sale failed
             }
+        }
+
+        // THE FIX: Always remove from vault deals list immediately
+        // Filter by dbId if it's a vault deal
+        if (dbId) {
+            setVaultDeals(prev => prev.filter(d => d.id !== dbId));
         }
 
         // Update volume ticker
@@ -798,7 +803,7 @@ function TerminalApp() {
         setSaleToast(`SOLD TO ${bid.firmName.toUpperCase()} FOR ${formatBidAmount(bid.bidAmount)}`);
         setTimeout(() => setSaleToast(null), 4000);
 
-        // Clear selection
+        // Clear selection immediately
         setSelectedDeal(null);
         setActiveBids([]);
 
