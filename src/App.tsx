@@ -260,10 +260,13 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
     const logRef = React.useRef<HTMLDivElement>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const [currentResult, setCurrentResult] = useState<AnalyzedResult | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     // Handle file ingest - run forensic analysis with actual text scanning
     const handleFileIngest = async (file: File) => {
         setShowIngestModal(false);
+        setIsProcessing(true); // Stop idle animations
+        setActiveStage(0);
         const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
 
         // Initial ingest logs
@@ -435,9 +438,12 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
         });
     }, 800);
 
-    // Stage cycling - every 4 seconds
+    // Stage cycling - every 4 seconds (ONLY WHEN IDLE)
     useInterval(() => {
-        setActiveStage(prev => (prev + 1) % 5);
+        // Stop cycling if: Processing a file, Result is ready, or Deal is selected
+        if (!isProcessing && !currentResult && !selectedDeal) {
+            setActiveStage(prev => (prev + 1) % 5);
+        }
     }, 4000);
 
     // Auto-scroll log
@@ -820,7 +826,7 @@ function TerminalApp() {
     // Fetch existing deals from Supabase on load
     useEffect(() => {
         const fetchDeals = async () => {
-            const { data, error } = await supabase.from('deals').select('*').order('created_at', { ascending: false });
+            const { data, error } = await supabase.from('deals').select('*').neq('status', 'SOLD').order('created_at', { ascending: false });
             if (error) {
                 console.error('[VAULT] Supabase error:', error.message);
                 setVaultError(`VAULT ERROR: ${error.message}`);
