@@ -11,12 +11,13 @@ import {
     Settings, Shield, ShieldCheck, Target,
     Terminal, TrendingUp, Upload, User,
     Wifi, Zap, Building, Cpu,
-    Circle, Eye
+    Circle, Eye, Download
 } from 'lucide-react';
 import { scanFileContent, AnalyzedResult, formatCurrency as fmtCurrency } from './forensicEngine';
 import { supabase, Deal } from './lib/supabase';
 import extractPdfText from './lib/pdfReader';
 import { generateMarketBids, MarketBid, formatBidAmount, getTierColor, getTierBadge } from './lib/arbitrageFloor';
+import { downloadAuditReport, Deal as ReportDeal } from './lib/reportGenerator';
 import PublicLanding from './PublicLanding';
 
 interface FinancialRow {
@@ -258,6 +259,7 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
     const [isDragging, setIsDragging] = useState(false);
     const logRef = React.useRef<HTMLDivElement>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const [currentResult, setCurrentResult] = useState<AnalyzedResult | null>(null);
 
     // Handle file ingest - run forensic analysis with actual text scanning
     const handleFileIngest = async (file: File) => {
@@ -294,6 +296,7 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
             text = await file.text();
         }
         const result = scanFileContent(text);
+        setCurrentResult(result); // Set the current result here
 
         // Log the scan result
         setLogs(prev => [...prev, {
@@ -460,6 +463,42 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
 
     const logColor = (l: string) => l === 'success' ? 'text-emerald-400' : l === 'warning' ? 'text-amber-400' : l === 'system' ? 'text-cyan-400' : 'text-slate-400';
 
+    const handleDownloadPacket = () => {
+        if (!currentResult) return;
+
+        setLogs(prev => [...prev, { id: `dl-${Date.now()}`, timestamp: new Date(), level: 'system', message: `>> [EXPORT] GENERATING FORENSIC PACKET...`, module: 'SYSTEM' }]);
+
+        // Map result to ReportDeal
+        const deal: ReportDeal = {
+            id: currentResult.analysisId || 'UNKNOWN',
+            company: `SCAN-${currentResult.analysisId.slice(-6)}`,
+            value: currentResult.financialSummary.totalEstimatedValue,
+            risk_score: currentResult.overallRiskLevel === 'low' ? 25 : currentResult.overallRiskLevel === 'medium' ? 50 : 75,
+            status: 'VERIFIED',
+            analyzed_at: currentResult.timestamp,
+            is_rd_eligible: currentResult.isRdEligible,
+            is_training_eligible: currentResult.isTrainingEligible,
+            is_green_eligible: currentResult.isGreenEligible,
+            is_erc_eligible: currentResult.isErcEligible,
+            rd_credit_value: currentResult.financialSummary.rdCreditValue,
+            training_credit_value: currentResult.financialSummary.trainingCreditValue,
+            green_energy_value: currentResult.financialSummary.greenEnergyValue,
+            erc_value: currentResult.financialSummary.otherCreditsValue,
+            confidence_score: Math.round(currentResult.processingDetails.confidenceScore * 100),
+            anomalies: currentResult.riskIndicators.map(r => ({
+                description: r.description,
+                severity: r.type === 'warning' ? 'high' : 'medium',
+                category: r.category
+            }))
+        };
+
+        downloadAuditReport(deal, `GrantFlow_Audit_${deal.company}.pdf`);
+
+        setTimeout(() => {
+            setLogs(prev => [...prev, { id: `dl-ok-${Date.now()}`, timestamp: new Date(), level: 'success', message: `>> [EXPORT] PDF DOWNLOAD COMPLETE`, module: 'SYSTEM' }]);
+        }, 1000);
+    };
+
     return (
         <div className="flex flex-col h-full bg-slate-900">
             <div className="px-3 py-1 bg-slate-800 border-b border-slate-700 flex items-center gap-2">
@@ -471,16 +510,18 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
                 <div className="flex-1 p-3 border-r border-slate-700 flex items-center justify-between">
                     {stageNames.map((name, idx) => {
                         const status = getStageStatus(idx);
-                        const Icon = stageIcons[idx];
-                        const isClickable = idx === 0; // Only INGEST is clickable
+                        const Icon = idx === 4 && status === 'complete' ? Download : stageIcons[idx]; // Switch to download icon if ready
+                        const isClickable = idx === 0 || (idx === 4 && status === 'complete'); // INGEST or DOWNLOAD
+                        const label = idx === 4 && status === 'complete' ? 'DOWNLOAD' : name; // Change label
+
                         return (
                             <React.Fragment key={idx}>
                                 <div
-                                    onClick={isClickable ? () => setShowIngestModal(true) : undefined}
+                                    onClick={idx === 0 ? () => setShowIngestModal(true) : idx === 4 && status === 'complete' ? handleDownloadPacket : undefined}
                                     className={`flex flex-col items-center p-2 rounded border-2 transition-all duration-300 ${getColor(status, idx)} min-w-[90px] ${isClickable ? 'cursor-pointer hover:border-emerald-400 hover:bg-emerald-900/20' : ''}`}
                                 >
-                                    <Icon className={`w-5 h-5 mb-1 transition-colors ${ingestFlash && idx === 0 ? 'text-emerald-300' : status === 'complete' ? 'text-emerald-400' : status === 'active' ? 'text-cyan-300' : 'text-slate-500'}`} />
-                                    <div className="text-[9px] font-bold text-white">{name}</div>
+                                    <Icon className={`w-5 h-5 mb-1 ${status === 'active' || (idx === 4 && status === 'complete') ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
+                                    <div className="text-[9px] font-bold text-white">{label}</div>
                                     <div className="text-[8px] text-slate-400 font-mono">{stageProgress[idx] > 0 ? stageProgress[idx] : '--'}</div>
                                     {status === 'active' && <div className="mt-1 flex items-center gap-1"><div className="w-1 h-1 rounded-full bg-cyan-400 animate-ping" /></div>}
                                     {ingestFlash && idx === 0 && <div className="mt-1 text-[7px] text-emerald-400 font-mono animate-pulse">RECEIVED</div>}
