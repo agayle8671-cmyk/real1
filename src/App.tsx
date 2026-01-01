@@ -361,6 +361,10 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
                 if (onAnalysisComplete) {
                     onAnalysisComplete(result);
                 }
+
+                // FORCE COMPLETION and RESET PROCESSING LOCK
+                setActiveStage(5);
+                setIsProcessing(false);
             }
         }, 800);
     };
@@ -438,13 +442,13 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
         });
     }, 800);
 
-    // Stage cycling - every 4 seconds (ONLY WHEN IDLE)
+    // Stage cycling - DISABLED to prevent confusion. Only animate on actual processing.
     useInterval(() => {
-        // Stop cycling if: Processing a file, Result is ready, or Deal is selected
-        if (!isProcessing && !currentResult && !selectedDeal) {
-            setActiveStage(prev => (prev + 1) % 5);
-        }
-    }, 4000);
+        // Disabled idle animation
+        // if (!isProcessing && !currentResult && !selectedDeal) {
+        //     setActiveStage(prev => (prev + 1) % 5);
+        // }
+    }, null);
 
     // Auto-scroll log
     React.useEffect(() => {
@@ -546,21 +550,21 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
                 <div className="flex-1 p-3 border-r border-slate-700 flex items-center justify-between">
                     {stageNames.map((name, idx) => {
                         const status = getStageStatus(idx);
-                        // Show download button if (Ready stage complete) OR (A deal is selected)
-                        const showDownload = (idx === 4 && status === 'complete') || (idx === 4 && selectedDeal);
+                        // Show download button ONLY if (Ready stage is explicitly COMPLETE/ACTIVE=5) OR (A deal is selected)
+                        const showDownload = (idx === 4 && activeStage >= 5) || (idx === 4 && selectedDeal);
 
                         const Icon = showDownload ? Download : stageIcons[idx];
                         const isClickable = idx === 0 || showDownload;
                         const label = showDownload ? 'DOWNLOAD PACKET' : name;
 
                         // Pulse if download is ready (selected deal or scan complete)
-                        const readyPulse = showDownload && (selectedDeal || status === 'complete');
+                        const readyPulse = showDownload && (selectedDeal || activeStage >= 5);
 
                         return (
                             <React.Fragment key={idx}>
                                 <div
-                                    onClick={idx === 0 ? () => setShowIngestModal(true) : showDownload ? handleDownloadPacket : undefined}
-                                    className={`flex flex-col items-center p-2 rounded border-2 transition-all duration-300 ${getColor(status, idx)} min-w-[90px] ${readyPulse ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-900 border-emerald-400 bg-emerald-900/40' : ''} ${isClickable ? 'cursor-pointer hover:border-emerald-400 hover:bg-emerald-900/20' : ''}`}
+                                    onClick={idx === 0 ? () => !isProcessing && setShowIngestModal(true) : showDownload ? handleDownloadPacket : undefined}
+                                    className={`flex flex-col items-center p-2 rounded border-2 transition-all duration-300 ${getColor(status, idx)} min-w-[90px] ${readyPulse ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-900 border-emerald-400 bg-emerald-900/40' : ''} ${isClickable && !isProcessing ? 'cursor-pointer hover:border-emerald-400 hover:bg-emerald-900/20' : ''} ${isProcessing && idx === 0 ? 'opacity-50 cursor-wait' : ''}`}
                                 >
                                     <Icon className={`w-5 h-5 mb-1 ${status === 'active' || readyPulse ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
                                     <span className={`text-[9px] font-bold mt-1 ${readyPulse ? 'text-emerald-400' : 'text-slate-400'}`}>{label}</span>
