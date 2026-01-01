@@ -53,7 +53,7 @@ async function verifyConnection() {
     // No, let's try generateContent. 
 
     // Custom payload for thinking level if supported (speculative)
-    // payload.generation_config = { thinking_level: "medium" }; 
+    payload.generation_config = { thinking_level: "high" };
 
     try {
         const response = await fetch(url, {
