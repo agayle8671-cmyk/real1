@@ -746,27 +746,180 @@ function TerminalApp() {
 }
 
 // ============================================================================
-// ROOT APP WITH VIEW TOGGLE
+// ROOT APP WITH VIEW TOGGLE + GATEKEEPER AUTHENTICATION
 // ============================================================================
 
+// Gatekeeper Modal Component
+const GatekeeperModal: React.FC<{
+    onAuthenticate: () => void;
+    onCancel: () => void;
+}> = ({ onAuthenticate, onCancel }) => {
+    const [code, setCode] = useState('');
+    const [error, setError] = useState(false);
+    const [shake, setShake] = useState(false);
+    const inputRef = React.useRef<HTMLInputElement>(null);
+
+    React.useEffect(() => {
+        inputRef.current?.focus();
+    }, []);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (code === 'PROFIT_2026') {
+            onAuthenticate();
+        } else {
+            setError(true);
+            setShake(true);
+            setCode('');
+            setTimeout(() => setShake(false), 500);
+            setTimeout(() => setError(false), 3000);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+            {/* Dark backdrop - no click to close */}
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+
+            {/* Modal */}
+            <div className={`relative w-[420px] bg-gradient-to-b from-slate-900 to-slate-950 border border-red-900/50 rounded-lg shadow-2xl shadow-red-900/20 overflow-hidden ${shake ? 'animate-pulse' : ''}`}>
+                {/* Danger stripe header */}
+                <div className="h-1 w-full bg-gradient-to-r from-red-600 via-red-500 to-red-600" />
+
+                {/* Classified header */}
+                <div className="bg-red-950/30 border-b border-red-900/30 px-6 py-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-red-900/50 border border-red-700/50 flex items-center justify-center">
+                            <Shield className="w-5 h-5 text-red-400" />
+                        </div>
+                        <div>
+                            <h2 className="text-red-400 font-mono text-sm tracking-widest uppercase">Classified Access</h2>
+                            <p className="text-slate-500 text-xs font-mono">TERMINAL SECURITY PROTOCOL</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-6">
+                    <div className="mb-6 text-center">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                            <span className="text-red-400 font-mono text-xs tracking-wider">RESTRICTED ZONE</span>
+                            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        </div>
+                        <p className="text-slate-400 text-sm">Enter authorization code to access Terminal</p>
+                    </div>
+
+                    <form onSubmit={handleSubmit}>
+                        <div className="relative mb-4">
+                            <input
+                                ref={inputRef}
+                                type="password"
+                                value={code}
+                                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                                placeholder="••••••••••"
+                                className={`w-full bg-slate-800/50 border ${error ? 'border-red-500 ring-2 ring-red-500/30' : 'border-slate-700'} rounded-lg px-4 py-3 text-white font-mono text-center tracking-[0.5em] text-lg placeholder:text-slate-600 placeholder:tracking-[0.3em] focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 transition-all ${shake ? 'animate-[shake_0.5s_ease-in-out]' : ''}`}
+                                autoComplete="off"
+                            />
+                            {error && (
+                                <div className="absolute -bottom-5 left-0 right-0 text-center">
+                                    <span className="text-red-500 text-xs font-mono animate-pulse">⚠ ACCESS DENIED</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3 mt-8">
+                            <button
+                                type="button"
+                                onClick={onCancel}
+                                className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 font-mono text-sm rounded-lg transition-colors"
+                            >
+                                CANCEL
+                            </button>
+                            <button
+                                type="submit"
+                                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-mono text-sm font-bold rounded-lg shadow-lg shadow-red-900/30 transition-all flex items-center justify-center gap-2"
+                            >
+                                <Terminal className="w-4 h-4" />
+                                AUTHENTICATE
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                {/* Footer */}
+                <div className="bg-slate-900/50 border-t border-slate-800 px-6 py-3 flex items-center justify-between">
+                    <span className="text-slate-600 text-[10px] font-mono">GRANTFLOW SECURITY v2.0</span>
+                    <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-slate-600 text-[10px] font-mono">ARMED</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export default function AppWithViewToggle() {
-    const [viewMode, setViewMode] = useState<'TERMINAL' | 'PUBLIC'>('TERMINAL');
+    const [viewMode, setViewMode] = useState<'TERMINAL' | 'PUBLIC'>('PUBLIC'); // Default to PUBLIC
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [showAuthModal, setShowAuthModal] = useState(false);
 
     const handleToggle = () => {
-        setViewMode(prev => prev === 'TERMINAL' ? 'PUBLIC' : 'TERMINAL');
+        if (viewMode === 'TERMINAL') {
+            // Switching to PUBLIC - always allowed
+            setViewMode('PUBLIC');
+        } else {
+            // Switching to TERMINAL - check auth
+            if (isAuthenticated) {
+                setViewMode('TERMINAL');
+            } else {
+                setShowAuthModal(true);
+            }
+        }
+    };
+
+    const handleAuthenticate = () => {
+        setIsAuthenticated(true);
+        setShowAuthModal(false);
+        setViewMode('TERMINAL');
+    };
+
+    const handleCancelAuth = () => {
+        setShowAuthModal(false);
     };
 
     return (
         <>
             {viewMode === 'TERMINAL' ? <TerminalApp key="terminal" /> : <PublicLanding key="public" />}
 
+            {/* Auth Modal */}
+            {showAuthModal && (
+                <GatekeeperModal
+                    onAuthenticate={handleAuthenticate}
+                    onCancel={handleCancelAuth}
+                />
+            )}
+
             {/* Dev Switch Button */}
             <button
                 onClick={handleToggle}
-                className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-bold rounded-lg shadow-lg shadow-purple-500/30 transition-all hover:scale-105"
+                className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-2 text-white text-sm font-bold rounded-lg shadow-lg transition-all hover:scale-105 ${viewMode === 'TERMINAL'
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-purple-500/30'
+                        : 'bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 shadow-red-500/30'
+                    }`}
             >
-                <Eye className="w-4 h-4" />
-                {viewMode === 'TERMINAL' ? 'VIEW PUBLIC' : 'VIEW TERMINAL'}
+                {viewMode === 'TERMINAL' ? (
+                    <>
+                        <Eye className="w-4 h-4" />
+                        VIEW PUBLIC
+                    </>
+                ) : (
+                    <>
+                        <Shield className="w-4 h-4" />
+                        ACCESS TERMINAL
+                    </>
+                )}
             </button>
         </>
     );
