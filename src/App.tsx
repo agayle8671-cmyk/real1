@@ -250,7 +250,7 @@ const UnderwritingMatrix: React.FC<{ result: AnalyzedResult | null }> = ({ resul
     );
 };
 
-const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedResult) => void }> = ({ onAnalysisComplete }) => {
+const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedResult) => void; selectedDeal?: Lead | null }> = ({ onAnalysisComplete, selectedDeal }) => {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [activeStage, setActiveStage] = useState(0);
     const [stageProgress, setStageProgress] = useState([847, 0, 0, 0, 0]);
@@ -464,35 +464,65 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
     const logColor = (l: string) => l === 'success' ? 'text-emerald-400' : l === 'warning' ? 'text-amber-400' : l === 'system' ? 'text-cyan-400' : 'text-slate-400';
 
     const handleDownloadPacket = () => {
-        if (!currentResult) return;
+        if (!currentResult && !selectedDeal) {
+            // Toast or log warning
+            setLogs(prev => [...prev, { id: `dl-err-${Date.now()}`, timestamp: new Date(), level: 'warning', message: `>> [EXPORT] ERROR: NO DEAL SELECTED`, module: 'SYSTEM' }]);
+            return;
+        }
 
-        setLogs(prev => [...prev, { id: `dl-${Date.now()}`, timestamp: new Date(), level: 'system', message: `>> [EXPORT] GENERATING FORENSIC PACKET...`, module: 'SYSTEM' }]);
+        setLogs(prev => [...prev, { id: `dl-${Date.now()}`, timestamp: new Date(), level: 'system', message: `>> [EXPORT] GENERATING FORENSIC PACKET FOR ${selectedDeal ? selectedDeal.company : currentResult?.analysisId}...`, module: 'SYSTEM' }]);
 
-        // Map result to ReportDeal
-        const deal: ReportDeal = {
-            id: currentResult.analysisId || 'UNKNOWN',
-            company: `SCAN-${currentResult.analysisId.slice(-6)}`,
-            value: currentResult.financialSummary.totalEstimatedValue,
-            risk_score: currentResult.overallRiskLevel === 'low' ? 25 : currentResult.overallRiskLevel === 'medium' ? 50 : 75,
-            status: 'VERIFIED',
-            analyzed_at: currentResult.timestamp,
-            is_rd_eligible: currentResult.isRdEligible,
-            is_training_eligible: currentResult.isTrainingEligible,
-            is_green_eligible: currentResult.isGreenEligible,
-            is_erc_eligible: currentResult.isErcEligible,
-            rd_credit_value: currentResult.financialSummary.rdCreditValue,
-            training_credit_value: currentResult.financialSummary.trainingCreditValue,
-            green_energy_value: currentResult.financialSummary.greenEnergyValue,
-            erc_value: currentResult.financialSummary.otherCreditsValue,
-            confidence_score: Math.round(currentResult.processingDetails.confidenceScore * 100),
-            anomalies: currentResult.riskIndicators.map(r => ({
-                description: r.description,
-                severity: r.type === 'warning' ? 'high' : 'medium',
-                category: r.category
-            }))
-        };
+        let deal: ReportDeal;
 
-        downloadAuditReport(deal, `GrantFlow_Audit_${deal.company}.pdf`);
+        if (selectedDeal) {
+            // Generate report from selected deal (mocking missing forensic details)
+            deal = {
+                id: selectedDeal.id,
+                company: selectedDeal.company,
+                value: selectedDeal.estValue,
+                risk_score: selectedDeal.eligibility > 90 ? 12 : selectedDeal.eligibility > 70 ? 35 : 65,
+                status: 'VERIFIED',
+                analyzed_at: new Date().toISOString(),
+                is_rd_eligible: true,
+                is_training_eligible: true,
+                is_green_eligible: false,
+                is_erc_eligible: false,
+                rd_credit_value: Math.round(selectedDeal.estValue * 0.72),
+                training_credit_value: Math.round(selectedDeal.estValue * 0.28),
+                green_energy_value: 0,
+                erc_value: 0,
+                confidence_score: selectedDeal.eligibility,
+                anomalies: []
+            };
+        } else if (currentResult) {
+            // Generate report from file scan result
+            deal = {
+                id: currentResult.analysisId || 'UNKNOWN',
+                company: `SCAN-${currentResult.analysisId.slice(-6)}`,
+                value: currentResult.financialSummary.totalEstimatedValue,
+                risk_score: currentResult.overallRiskLevel === 'low' ? 25 : currentResult.overallRiskLevel === 'medium' ? 50 : 75,
+                status: 'VERIFIED',
+                analyzed_at: currentResult.timestamp,
+                is_rd_eligible: currentResult.isRdEligible,
+                is_training_eligible: currentResult.isTrainingEligible,
+                is_green_eligible: currentResult.isGreenEligible,
+                is_erc_eligible: currentResult.isErcEligible,
+                rd_credit_value: currentResult.financialSummary.rdCreditValue,
+                training_credit_value: currentResult.financialSummary.trainingCreditValue,
+                green_energy_value: currentResult.financialSummary.greenEnergyValue,
+                erc_value: currentResult.financialSummary.otherCreditsValue,
+                confidence_score: Math.round(currentResult.processingDetails.confidenceScore * 100),
+                anomalies: currentResult.riskIndicators.map(r => ({
+                    description: r.description,
+                    severity: r.type === 'warning' ? 'high' : 'medium',
+                    category: r.category
+                }))
+            };
+        } else {
+            return;
+        }
+
+        downloadAuditReport(deal, `GrantFlow_Audit_${deal.company.replace(/\s+/g, '_')}.pdf`);
 
         setTimeout(() => {
             setLogs(prev => [...prev, { id: `dl-ok-${Date.now()}`, timestamp: new Date(), level: 'success', message: `>> [EXPORT] PDF DOWNLOAD COMPLETE`, module: 'SYSTEM' }]);
@@ -510,18 +540,24 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
                 <div className="flex-1 p-3 border-r border-slate-700 flex items-center justify-between">
                     {stageNames.map((name, idx) => {
                         const status = getStageStatus(idx);
-                        const Icon = idx === 4 && status === 'complete' ? Download : stageIcons[idx]; // Switch to download icon if ready
-                        const isClickable = idx === 0 || (idx === 4 && status === 'complete'); // INGEST or DOWNLOAD
-                        const label = idx === 4 && status === 'complete' ? 'DOWNLOAD' : name; // Change label
+                        // Show download button if (Ready stage complete) OR (A deal is selected)
+                        const showDownload = (idx === 4 && status === 'complete') || (idx === 4 && selectedDeal);
+
+                        const Icon = showDownload ? Download : stageIcons[idx];
+                        const isClickable = idx === 0 || showDownload;
+                        const label = showDownload ? 'DOWNLOAD PACKET' : name;
+
+                        // Pulse if download is ready (selected deal or scan complete)
+                        const readyPulse = showDownload && (selectedDeal || status === 'complete');
 
                         return (
                             <React.Fragment key={idx}>
                                 <div
-                                    onClick={idx === 0 ? () => setShowIngestModal(true) : idx === 4 && status === 'complete' ? handleDownloadPacket : undefined}
-                                    className={`flex flex-col items-center p-2 rounded border-2 transition-all duration-300 ${getColor(status, idx)} min-w-[90px] ${isClickable ? 'cursor-pointer hover:border-emerald-400 hover:bg-emerald-900/20' : ''}`}
+                                    onClick={idx === 0 ? () => setShowIngestModal(true) : showDownload ? handleDownloadPacket : undefined}
+                                    className={`flex flex-col items-center p-2 rounded border-2 transition-all duration-300 ${getColor(status, idx)} min-w-[90px] ${readyPulse ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-900 border-emerald-400 bg-emerald-900/40' : ''} ${isClickable ? 'cursor-pointer hover:border-emerald-400 hover:bg-emerald-900/20' : ''}`}
                                 >
-                                    <Icon className={`w-5 h-5 mb-1 ${status === 'active' || (idx === 4 && status === 'complete') ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
-                                    <div className="text-[9px] font-bold text-white">{label}</div>
+                                    <Icon className={`w-5 h-5 mb-1 ${status === 'active' || readyPulse ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
+                                    <span className={`text-[9px] font-bold mt-1 ${readyPulse ? 'text-emerald-400' : 'text-slate-400'}`}>{label}</span>
                                     <div className="text-[8px] text-slate-400 font-mono">{stageProgress[idx] > 0 ? stageProgress[idx] : '--'}</div>
                                     {status === 'active' && <div className="mt-1 flex items-center gap-1"><div className="w-1 h-1 rounded-full bg-cyan-400 animate-ping" /></div>}
                                     {ingestFlash && idx === 0 && <div className="mt-1 text-[7px] text-emerald-400 font-mono animate-pulse">RECEIVED</div>}
@@ -907,7 +943,7 @@ function TerminalApp() {
                         <div className="bg-slate-900 p-2"><div className="flex items-center gap-1 mb-2"><TrendingUp className="w-3 h-3 text-emerald-400" /><span className="text-[10px] font-bold text-white">VELOCITY</span></div><div className="h-32"><ResponsiveContainer width="100%" height="100%"><AreaChart data={Array.from({ length: 24 }, (_, i) => ({ h: i, v: 80 + Math.random() * 60 }))}><defs><linearGradient id="vg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs><XAxis dataKey="h" tick={{ fontSize: 8 }} stroke="#475569" /><YAxis tick={{ fontSize: 8 }} stroke="#475569" /><Area type="monotone" dataKey="v" stroke="#10b981" fill="url(#vg)" strokeWidth={2} /></AreaChart></ResponsiveContainer></div></div>
                         <div className="bg-slate-900 p-2"><div className="flex items-center gap-1 mb-2"><Target className="w-3 h-3 text-amber-400" /><span className="text-[10px] font-bold text-white">CONVERSION</span></div><div className="h-32 flex flex-col justify-center gap-1">{[{ s: 'INGEST', v: 1247, p: 100 }, { s: 'QUALIFY', v: 892, p: 71 }, { s: 'VERIFY', v: 634, p: 51 }, { s: 'SOLD', v: 342, p: 27 }].map(i => <div key={i.s} className="flex items-center gap-2"><span className="text-[8px] text-slate-500 w-10 font-mono">{i.s}</span><div className="flex-1 h-2.5 bg-slate-800 rounded overflow-hidden"><div className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 rounded" style={{ width: `${i.p}%` }} /></div><span className="text-[9px] text-white font-mono w-8 text-right">{i.v}</span></div>)}</div></div>
                     </div>
-                    <div className="h-[180px] flex-shrink-0 border-t border-slate-700"><VerificationGauntlet onAnalysisComplete={handleAnalysisComplete} /></div>
+                    <div className="h-[180px] flex-shrink-0 border-t border-slate-700"><VerificationGauntlet onAnalysisComplete={handleAnalysisComplete} selectedDeal={selectedDeal} /></div>
                 </div>
                 <div className="w-[280px] flex-shrink-0"><ArbitrageFloor bids={activeBids} selectedDeal={selectedDeal} onSell={handleSell} totalVolume={totalVolume} /></div>
             </div>
