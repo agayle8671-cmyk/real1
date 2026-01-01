@@ -16,7 +16,7 @@ import {
 import { scanFileContent, AnalyzedResult, formatCurrency as fmtCurrency } from './forensicEngine';
 import { supabase, Deal } from './lib/supabase';
 import extractPdfText from './lib/pdfReader';
-import { generateMarketBids, executeSale, MarketBid, formatBidAmount, getTierColor, getTierBadge } from './lib/arbitrageFloor';
+import { generateMarketBids, MarketBid, formatBidAmount, getTierColor, getTierBadge } from './lib/arbitrageFloor';
 import PublicLanding from './PublicLanding';
 
 interface FinancialRow {
@@ -657,10 +657,11 @@ const ArbitrageFloor: React.FC<ArbitrageFloorProps> = ({ bids, selectedDeal, onS
 interface LeadGridProps {
     vaultDeals: Deal[];
     selectedId: string | null;
+    hiddenLeadIds: string[];
     onSelectLead: (lead: Lead) => void;
 }
 
-const LeadGrid: React.FC<LeadGridProps> = ({ vaultDeals, selectedId, onSelectLead }) => {
+const LeadGrid: React.FC<LeadGridProps> = ({ vaultDeals, selectedId, hiddenLeadIds, onSelectLead }) => {
     // Combine static leads with vault deals
     const staticLeads: Lead[] = [
         { id: 'L-48291', company: 'NexGen Tech', ein: '82-4729103', sector: 'SaaS', eligibility: 94, estValue: 234500, stage: 4, priority: 'critical', timestamp: new Date() },
@@ -681,7 +682,7 @@ const LeadGrid: React.FC<LeadGridProps> = ({ vaultDeals, selectedId, onSelectLea
         dbId: d.id, // Store original DB id for sale execution
     }));
 
-    const leads = [...vaultLeads, ...staticLeads];
+    const leads = [...vaultLeads, ...staticLeads].filter(l => !hiddenLeadIds.includes(l.id));
     const prioColor = (p: string) => p === 'critical' ? 'bg-red-500/20 text-red-400' : p === 'high' ? 'bg-amber-500/20 text-amber-400' : 'bg-cyan-500/20 text-cyan-400';
 
     return (
@@ -737,6 +738,7 @@ function TerminalApp() {
     const [activeBids, setActiveBids] = useState<MarketBid[]>([]);
     const [totalVolume, setTotalVolume] = useState(847000); // Starting volume
     const [saleToast, setSaleToast] = useState<string | null>(null);
+    const [hiddenLeadIds, setHiddenLeadIds] = useState<string[]>([]);
 
     // Fetch existing deals from Supabase on load
     useEffect(() => {
@@ -774,38 +776,44 @@ function TerminalApp() {
     const handleSell = async (bid: MarketBid) => {
         if (!selectedDeal) return;
 
-        console.log(`[SALE] Executing sale to ${bid.firmName} for $${bid.bidAmount}`);
+        console.log("Attempting to sell Deal ID:", selectedDeal.id);
 
-        // Get the database ID if this is a vault deal
+        // 1. Optimistic Update (Remove it from UI immediately)
+        setHiddenLeadIds(prev => [...prev, selectedDeal.id]);
+
+        // 2. Clear selection
+        setSelectedDeal(null);
+        setActiveBids([]);
+
+        // 3. Update Database in Background (if it's a vault deal)
         const dbId = (selectedDeal as Lead & { dbId?: number }).dbId;
 
         if (dbId) {
-            // Execute real sale in database
-            const result = await executeSale(dbId, bid.firmName, bid.bidAmount);
-            if (result.success) {
-                console.log(`[SALE] Transaction ${result.transactionId} complete!`);
+            const { error } = await supabase
+                .from('deals')
+                .update({
+                    status: 'SOLD',
+                    sold_to: bid.firmName,
+                    sale_price: bid.bidAmount,
+                    sold_at: new Date().toISOString()
+                })
+                .eq('id', dbId);
+
+            if (error) {
+                console.error("CRITICAL SALE ERROR:", error);
+                setSaleToast(`SALE FAILED: ${error.message}`);
             } else {
-                console.error(`[SALE] Failed: ${result.error}`);
-                return; // Don't update UI if sale failed
+                console.log("Database update successful");
+                // Also remove from vaultDeals to keep state clean (though hiddenLeadIds handles UI)
+                setVaultDeals(prev => prev.filter(d => d.id !== dbId));
             }
         }
 
-        // THE FIX: Always remove from vault deals list immediately
-        // Filter by dbId if it's a vault deal
-        if (dbId) {
-            setVaultDeals(prev => prev.filter(d => d.id !== dbId));
-        }
-
-        // Update volume ticker
         setTotalVolume(prev => prev + bid.bidAmount);
 
         // Show toast
         setSaleToast(`SOLD TO ${bid.firmName.toUpperCase()} FOR ${formatBidAmount(bid.bidAmount)}`);
         setTimeout(() => setSaleToast(null), 4000);
-
-        // Clear selection immediately
-        setSelectedDeal(null);
-        setActiveBids([]);
 
         // Flash dashboard
         setDashboardFlash(true);
@@ -853,7 +861,7 @@ function TerminalApp() {
             <div className="flex-1 flex overflow-hidden">
                 <div className="w-[340px] flex-shrink-0"><UnderwritingMatrix result={activeResult} /></div>
                 <div className="flex-1 flex flex-col overflow-hidden">
-                    <div className="flex-shrink-0"><LeadGrid vaultDeals={vaultDeals} selectedId={selectedDeal?.id || null} onSelectLead={handleSelectLead} /></div>
+                    <div className="flex-shrink-0"><LeadGrid vaultDeals={vaultDeals} selectedId={selectedDeal?.id || null} hiddenLeadIds={hiddenLeadIds} onSelectLead={handleSelectLead} /></div>
                     <div className="flex-1 grid grid-cols-2 gap-px bg-slate-700 overflow-hidden">
                         <div className="bg-slate-900 p-2"><div className="flex items-center gap-1 mb-2"><TrendingUp className="w-3 h-3 text-emerald-400" /><span className="text-[10px] font-bold text-white">VELOCITY</span></div><div className="h-32"><ResponsiveContainer width="100%" height="100%"><AreaChart data={Array.from({ length: 24 }, (_, i) => ({ h: i, v: 80 + Math.random() * 60 }))}><defs><linearGradient id="vg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs><XAxis dataKey="h" tick={{ fontSize: 8 }} stroke="#475569" /><YAxis tick={{ fontSize: 8 }} stroke="#475569" /><Area type="monotone" dataKey="v" stroke="#10b981" fill="url(#vg)" strokeWidth={2} /></AreaChart></ResponsiveContainer></div></div>
                         <div className="bg-slate-900 p-2"><div className="flex items-center gap-1 mb-2"><Target className="w-3 h-3 text-amber-400" /><span className="text-[10px] font-bold text-white">CONVERSION</span></div><div className="h-32 flex flex-col justify-center gap-1">{[{ s: 'INGEST', v: 1247, p: 100 }, { s: 'QUALIFY', v: 892, p: 71 }, { s: 'VERIFY', v: 634, p: 51 }, { s: 'SOLD', v: 342, p: 27 }].map(i => <div key={i.s} className="flex items-center gap-2"><span className="text-[8px] text-slate-500 w-10 font-mono">{i.s}</span><div className="flex-1 h-2.5 bg-slate-800 rounded overflow-hidden"><div className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 rounded" style={{ width: `${i.p}%` }} /></div><span className="text-[9px] text-white font-mono w-8 text-right">{i.v}</span></div>)}</div></div>
