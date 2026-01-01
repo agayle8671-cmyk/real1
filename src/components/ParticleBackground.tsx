@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 export default function ParticleBackground() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -36,7 +36,7 @@ export default function ParticleBackground() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#1A73E8'; // Google Blue
 
-            particles.forEach((p, i) => {
+            particles.forEach((p) => {
                 p.x += p.vx;
                 p.y += p.vy;
 

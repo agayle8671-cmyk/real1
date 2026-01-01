@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 const SidebarItem = ({ icon, label, active = false }: { icon: string, label: string, active?: boolean }) => (
     <div className={`flex items-center px-6 h-10 text-sm cursor-pointer transition-colors ${active ? 'bg-google-blue-light text-primary-blue' : 'text-text-primary hover:bg-gray-100'}`}>

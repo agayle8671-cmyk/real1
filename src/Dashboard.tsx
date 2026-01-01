@@ -1,4 +1,3 @@
-import React from 'react';
 import Layout from './components/Layout';
 import ResourceCard from './components/ResourceCard';
 import BillingBreakdown from './components/BillingBreakdown';
