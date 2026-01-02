@@ -497,6 +497,7 @@ const PublicLanding: React.FC = () => {
 
             // Connect to AI Brain
             const aiData = await analyzeDocumentWithAI(text);
+            console.log("🟢 UI RECEIVED:", aiData);
 
             // Convert to ScanResult format using AI data
             const result: ScanResult = {

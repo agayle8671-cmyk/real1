@@ -304,6 +304,7 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
 
         // 2. Send to Google Cloud AI Brain
         const aiAnalysis = await analyzeDocumentWithAI(text);
+        console.log("🟢 UI RECEIVED:", aiAnalysis);
 
         // 3. Merge AI intelligence with local structure
         const result: AnalyzedResult = {

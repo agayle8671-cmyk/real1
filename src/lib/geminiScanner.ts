@@ -8,6 +8,10 @@ export interface AIAnalysis {
 }
 
 export async function analyzeDocumentWithAI(text: string): Promise<AIAnalysis> {
+    // Task 1: Loud Debugging
+    // eslint-disable-next-line no-alert
+    alert("AI AGENT STARTING: " + text.slice(0, 50));
+    console.error("🔴 AI TRIGGERED - CHECK NETWORK TAB");
     console.log("SENDING TO GEMINI...", text.slice(0, 100));
 
     try {
