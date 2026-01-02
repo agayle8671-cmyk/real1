@@ -1,7 +1,7 @@
 // src/lib/reportGenerator.ts
 // ============================================================================
 // GRANTFLOW PROFESSIONAL AUDIT REPORT GENERATOR
-// Big 4 Style Audit Packet
+// Dynamic Spacing - No Hardcoded Y Values
 // ============================================================================
 
 import { jsPDF } from 'jspdf';
@@ -10,43 +10,31 @@ import { jsPDF } from 'jspdf';
 // TYPE DEFINITIONS
 // ============================================================================
 
-/** Deal information for report generation */
 export interface Deal {
     id: number | string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    [key: string]: any; // Allow loose typing to prevent App.tsx breakage
     company: string;
     ein?: string;
     value: number;
     risk_score: number;
     status: string;
-
-    // Eligibility flags
     is_rd_eligible?: boolean;
     is_training_eligible?: boolean;
     is_green_eligible?: boolean;
     is_erc_eligible?: boolean;
-
-    // Value breakdown
     rd_credit_value?: number;
     training_credit_value?: number;
     green_energy_value?: number;
     erc_value?: number;
-
-    // Additional metadata
     naics_code?: string;
     industry?: string;
     employee_count?: number;
     fiscal_year?: number;
     confidence_score?: number;
-
-    // Audit details
-    anomalies_count?: number;
-    created_at?: string;
     analyzed_at?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    anomalies?: any[];
 }
 
-/** Report generation options */
 export interface ReportOptions {
     preparedBy?: string;
     reportTitle?: string;
@@ -56,34 +44,43 @@ export interface ReportOptions {
 }
 
 // ============================================================================
-// CONSTANTS
+// PAGE CONFIGURATION
 // ============================================================================
 
-// Page dimensions (A4)
-const PAGE = {
+const PAGE_CONFIG = {
     width: 210,
     height: 297,
-    marginLeft: 25,
-    marginRight: 25,
-    marginTop: 20,
-    marginBottom: 17,
+    margin: {
+        top: 15,
+        bottom: 15,
+        left: 20,
+        right: 20,
+    },
+    // Footer zone - content must NOT enter this area
+    footerHeight: 25,
 } as const;
 
-const CONTENT_WIDTH = PAGE.width - PAGE.marginLeft - PAGE.marginRight;
+// Computed values
+const CONTENT_WIDTH = PAGE_CONFIG.width - PAGE_CONFIG.margin.left - PAGE_CONFIG.margin.right;
+const CONTENT_END_Y = PAGE_CONFIG.height - PAGE_CONFIG.margin.bottom - PAGE_CONFIG.footerHeight;
+// const FOOTER_START_Y = PAGE_CONFIG.height - PAGE_CONFIG.margin.bottom - PAGE_CONFIG.footerHeight + 5; // Unused but descriptive
 
-// Colors
-const COLOR = {
-    navy: [15, 30, 60] as const,
-    blue: [37, 99, 235] as const,
-    darkGray: [50, 50, 50] as const,
-    mediumGray: [120, 120, 120] as const,
-    lightGray: [200, 200, 200] as const,
-    bgGray: [245, 247, 250] as const,
-    white: [255, 255, 255] as const,
-    green: [16, 150, 80] as const,
-    red: [200, 50, 50] as const,
-    amber: [200, 130, 20] as const,
-};
+// ============================================================================
+// COLORS
+// ============================================================================
+
+const COLORS = {
+    navy: { r: 15, g: 30, b: 60 },
+    blue: { r: 37, g: 99, b: 235 },
+    darkText: { r: 45, g: 45, b: 45 },
+    mediumGray: { r: 120, g: 120, b: 120 },
+    lightGray: { r: 200, g: 200, b: 200 },
+    bgLight: { r: 248, g: 249, b: 252 },
+    white: { r: 255, g: 255, b: 255 },
+    green: { r: 22, g: 163, b: 74 },
+    red: { r: 220, g: 38, b: 38 },
+    amber: { r: 217, g: 119, b: 6 },
+} as const;
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -98,8 +95,8 @@ function formatCurrency(value: number): string {
     }).format(value);
 }
 
-function formatDate(date: Date | string = new Date()): string {
-    const d = typeof date === 'string' ? new Date(date) : date;
+function formatDate(date?: Date | string): string {
+    const d = date ? (typeof date === 'string' ? new Date(date) : date) : new Date();
     return d.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
@@ -108,495 +105,482 @@ function formatDate(date: Date | string = new Date()): string {
 }
 
 function generateCaseId(): string {
-    const year = new Date().getFullYear();
+    const now = new Date();
+    const year = now.getFullYear();
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
     return `GF-${year}-${random}`;
 }
 
-function getRiskLabel(score: number): { label: string; color: readonly number[] } {
-    if (score <= 25) return { label: 'Low', color: COLOR.green };
-    if (score <= 50) return { label: 'Moderate', color: COLOR.amber };
-    if (score <= 75) return { label: 'Elevated', color: COLOR.amber };
-    return { label: 'High', color: COLOR.red };
+function getRiskInfo(score: number): { label: string; color: { r: number; g: number; b: number } } {
+    if (score <= 25) return { label: 'Low Risk', color: COLORS.green };
+    if (score <= 50) return { label: 'Moderate', color: COLORS.amber };
+    if (score <= 75) return { label: 'Elevated', color: COLORS.amber };
+    return { label: 'High Risk', color: COLORS.red };
 }
 
-// Create dot leader string (Unused)
-// function createDotLeader(text: string, value: string, totalWidth: number, doc: jsPDF): string {
-//     const textWidth = doc.getTextWidth(text);
-//     const valueWidth = doc.getTextWidth(value);
-//     const dotsWidth = totalWidth - textWidth - valueWidth - 4;
-//     const dotChar = '.';
-//     const singleDotWidth = doc.getTextWidth(dotChar);
-//     const numDots = Math.floor(dotsWidth / singleDotWidth);
-//     return dotChar.repeat(Math.max(0, numDots));
-// }
+function setColor(doc: jsPDF, color: { r: number; g: number; b: number }, type: 'fill' | 'text' | 'draw'): void {
+    if (type === 'fill') doc.setFillColor(color.r, color.g, color.b);
+    else if (type === 'text') doc.setTextColor(color.r, color.g, color.b);
+    else doc.setDrawColor(color.r, color.g, color.b);
+}
 
 // ============================================================================
-// PDF COMPONENT FUNCTIONS
+// SECTION DRAWING FUNCTIONS
+// Each function returns the new Y position after drawing
 // ============================================================================
 
 /**
- * Draw the header section
+ * Draw header band and logo - Returns new Y position
  */
 function drawHeader(doc: jsPDF, caseId: string): number {
-    let y = PAGE.marginTop;
+    // Navy header band
+    setColor(doc, COLORS.navy, 'fill');
+    doc.rect(0, 0, PAGE_CONFIG.width, 6, 'F');
 
-    // Brand bar
-    doc.setFillColor(...COLOR.navy);
-    doc.rect(0, 0, PAGE.width, 8, 'F');
+    let y = PAGE_CONFIG.margin.top + 5;
 
-    // Logo text
+    // Logo
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(22);
-    doc.setTextColor(...COLOR.navy);
-    doc.text('GRANTFLOW', PAGE.marginLeft, y + 14);
+    doc.setFontSize(20);
+    setColor(doc, COLORS.navy, 'text');
+    doc.text('GRANTFLOW', PAGE_CONFIG.margin.left, y);
 
-    // Subtitle
+    // Tagline
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(...COLOR.mediumGray);
-    doc.text('Tax Credit Advisory Services', PAGE.marginLeft, y + 21);
+    doc.setFontSize(9);
+    setColor(doc, COLORS.mediumGray, 'text');
+    doc.text('Tax Credit Advisory Services', PAGE_CONFIG.margin.left, y + 6);
 
-    // Right side: Case ID and Date box
-    const boxWidth = 55;
-    const boxHeight = 22;
-    const boxX = PAGE.width - PAGE.marginRight - boxWidth;
-    const boxY = y + 4;
+    // Case info box (top right)
+    const boxWidth = 52;
+    const boxHeight = 18;
+    const boxX = PAGE_CONFIG.width - PAGE_CONFIG.margin.right - boxWidth;
+    const boxY = y - 8;
 
-    doc.setFillColor(COLOR.bgGray[0], COLOR.bgGray[1], COLOR.bgGray[2]);
-    doc.setDrawColor(COLOR.lightGray[0], COLOR.lightGray[1], COLOR.lightGray[2]);
+    setColor(doc, COLORS.bgLight, 'fill');
+    setColor(doc, COLORS.lightGray, 'draw');
     doc.setLineWidth(0.3);
     doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 2, 2, 'FD');
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(...COLOR.mediumGray);
-    doc.text('Case ID:', boxX + 4, boxY + 7);
-    doc.text('Date:', boxX + 4, boxY + 15);
+    doc.setFontSize(7);
+    setColor(doc, COLORS.mediumGray, 'text');
+    doc.text('Case ID:', boxX + 3, boxY + 6);
+    doc.text('Date:', boxX + 3, boxY + 13);
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(...COLOR.darkGray);
-    doc.text(caseId, boxX + 22, boxY + 7);
-    doc.text(formatDate(), boxX + 22, boxY + 15);
+    setColor(doc, COLORS.darkText, 'text');
+    doc.text(caseId, boxX + 20, boxY + 6);
+    doc.text(formatDate(), boxX + 20, boxY + 13);
 
     // Divider line
-    y = y + 32;
-    doc.setDrawColor(...COLOR.navy);
-    doc.setLineWidth(0.8);
-    doc.line(PAGE.marginLeft, y, PAGE.width - PAGE.marginRight, y);
+    y += 14;
+    setColor(doc, COLORS.navy, 'draw');
+    doc.setLineWidth(0.6);
+    doc.line(PAGE_CONFIG.margin.left, y, PAGE_CONFIG.width - PAGE_CONFIG.margin.right, y);
 
     return y + 8;
 }
 
 /**
- * Draw report title section
+ * Draw report title - Returns new Y position
  */
 function drawTitle(doc: jsPDF, y: number, title: string): number {
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.setTextColor(...COLOR.navy);
-    doc.text(title, PAGE.marginLeft, y);
+    doc.setFontSize(14);
+    setColor(doc, COLORS.navy, 'text');
+    doc.text(title.toUpperCase(), PAGE_CONFIG.margin.left, y);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.setTextColor(...COLOR.mediumGray);
-    doc.text('Preliminary Eligibility Assessment', PAGE.marginLeft, y + 6);
+    setColor(doc, COLORS.mediumGray, 'text');
+    doc.text('Preliminary Eligibility Assessment', PAGE_CONFIG.margin.left, y + 5);
 
-    return y + 16;
+    return y + 14;
 }
 
 /**
- * Draw client information section
+ * Draw client information - Returns new Y position
  */
 function drawClientInfo(doc: jsPDF, y: number, deal: Deal): number {
-    // Section header
+    // Section label
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(...COLOR.navy);
-    doc.text('CLIENT INFORMATION', PAGE.marginLeft, y);
+    doc.setFontSize(9);
+    setColor(doc, COLORS.navy, 'text');
+    doc.text('CLIENT INFORMATION', PAGE_CONFIG.margin.left, y);
 
-    // Thin divider
-    y += 3;
-    doc.setDrawColor(...COLOR.lightGray);
-    doc.setLineWidth(0.3);
-    doc.line(PAGE.marginLeft, y, PAGE.marginLeft + 45, y);
+    y += 2;
+    setColor(doc, COLORS.blue, 'draw');
+    doc.setLineWidth(0.4);
+    doc.line(PAGE_CONFIG.margin.left, y, PAGE_CONFIG.margin.left + 38, y);
 
-    y += 8;
+    y += 7;
 
-    // Two-column layout
-    const col1X = PAGE.marginLeft;
-    const col2X = PAGE.marginLeft + 85;
+    // Two columns of info
+    const col1 = PAGE_CONFIG.margin.left;
+    const col2 = PAGE_CONFIG.margin.left + 80;
 
-    // Labels
+    doc.setFontSize(8);
+
+    // Column 1
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(...COLOR.mediumGray);
-
-    doc.text('Company Name', col1X, y);
-    doc.text('EIN', col1X, y + 12);
-    doc.text('Industry', col2X, y);
-    doc.text('Fiscal Year', col2X, y + 12);
-
-    // Values
+    setColor(doc, COLORS.mediumGray, 'text');
+    doc.text('Company Name', col1, y);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(...COLOR.darkGray);
+    setColor(doc, COLORS.darkText, 'text');
+    doc.text(deal.company || '—', col1, y + 4);
 
-    doc.text(deal.company || '—', col1X, y + 5);
-    doc.text(deal.ein || 'Not Provided', col1X, y + 17);
-    doc.text(deal.industry || 'Technology', col2X, y + 5);
-    doc.text(deal.fiscal_year?.toString() || new Date().getFullYear().toString(), col2X, y + 17);
+    doc.setFont('helvetica', 'normal');
+    setColor(doc, COLORS.mediumGray, 'text');
+    doc.text('EIN', col1, y + 11);
+    doc.setFont('helvetica', 'bold');
+    setColor(doc, COLORS.darkText, 'text');
+    doc.text(deal.ein || 'Not Provided', col1, y + 15);
 
-    return y + 28;
+    // Column 2
+    doc.setFont('helvetica', 'normal');
+    setColor(doc, COLORS.mediumGray, 'text');
+    doc.text('Industry', col2, y);
+    doc.setFont('helvetica', 'bold');
+    setColor(doc, COLORS.darkText, 'text');
+    doc.text(deal.industry || 'Technology', col2, y + 4);
+
+    doc.setFont('helvetica', 'normal');
+    setColor(doc, COLORS.mediumGray, 'text');
+    doc.text('Fiscal Year', col2, y + 11);
+    doc.setFont('helvetica', 'bold');
+    setColor(doc, COLORS.darkText, 'text');
+    doc.text((deal.fiscal_year || new Date().getFullYear()).toString(), col2, y + 15);
+
+    return y + 24;
 }
 
 /**
- * Draw the main value summary box
+ * Draw horizontal divider - Returns new Y position
  */
-function drawValueSummary(doc: jsPDF, y: number, deal: Deal): number {
-    const boxHeight = 50;
+function drawDivider(doc: jsPDF, y: number): number {
+    setColor(doc, COLORS.lightGray, 'draw');
+    doc.setLineWidth(0.2);
+    doc.line(PAGE_CONFIG.margin.left, y, PAGE_CONFIG.width - PAGE_CONFIG.margin.right, y);
+    return y + 6;
+}
 
-    // Background box
-    doc.setFillColor(...COLOR.bgGray);
-    doc.setDrawColor(...COLOR.lightGray);
+/**
+ * Draw the main value summary box - Returns new Y position
+ */
+function drawValueBox(doc: jsPDF, y: number, deal: Deal): number {
+    const boxHeight = 42;
+
+    // Background
+    setColor(doc, COLORS.bgLight, 'fill');
+    setColor(doc, COLORS.lightGray, 'draw');
     doc.setLineWidth(0.3);
-    doc.roundedRect(PAGE.marginLeft, y, CONTENT_WIDTH, boxHeight, 3, 3, 'FD');
+    doc.roundedRect(PAGE_CONFIG.margin.left, y, CONTENT_WIDTH, boxHeight, 3, 3, 'FD');
 
-    // Left side: Label and Value
+    // Label
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(...COLOR.mediumGray);
-    doc.text('TOTAL ESTIMATED TAX CREDIT', PAGE.marginLeft + 10, y + 14);
+    doc.setFontSize(8);
+    setColor(doc, COLORS.mediumGray, 'text');
+    doc.text('TOTAL ESTIMATED TAX CREDIT VALUE', PAGE_CONFIG.margin.left + 8, y + 10);
 
+    // Large value
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(32);
-    doc.setTextColor(...COLOR.navy);
-    doc.text(formatCurrency(deal.value), PAGE.marginLeft + 10, y + 36);
+    doc.setFontSize(28);
+    setColor(doc, COLORS.navy, 'text');
+    doc.text(formatCurrency(deal.value), PAGE_CONFIG.margin.left + 8, y + 30);
 
-    // Right side: Risk Score
-    const riskBoxX = PAGE.width - PAGE.marginRight - 50;
-    const riskBoxY = y + 8;
-    const riskBoxW = 40;
-    const riskBoxH = 34;
+    // Risk score box (right side)
+    const riskBoxW = 36;
+    const riskBoxH = 30;
+    const riskBoxX = PAGE_CONFIG.width - PAGE_CONFIG.margin.right - riskBoxW - 6;
+    const riskBoxY = y + 6;
 
-    const { label: riskLabel, color: riskColor } = getRiskLabel(deal.risk_score);
+    const riskInfo = getRiskInfo(deal.risk_score);
 
-    doc.setFillColor(...COLOR.white);
-    doc.setDrawColor(...COLOR.lightGray);
+    setColor(doc, COLORS.white, 'fill');
+    setColor(doc, COLORS.lightGray, 'draw');
     doc.roundedRect(riskBoxX, riskBoxY, riskBoxW, riskBoxH, 2, 2, 'FD');
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(...COLOR.mediumGray);
-    doc.text('RISK SCORE', riskBoxX + riskBoxW / 2, riskBoxY + 8, { align: 'center' });
+    doc.setFontSize(6);
+    setColor(doc, COLORS.mediumGray, 'text');
+    doc.text('RISK SCORE', riskBoxX + riskBoxW / 2, riskBoxY + 7, { align: 'center' });
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.setTextColor(riskColor[0], riskColor[1], riskColor[2]);
-    doc.text(deal.risk_score.toString(), riskBoxX + riskBoxW / 2, riskBoxY + 21, { align: 'center' });
+    doc.setFontSize(16);
+    setColor(doc, riskInfo.color, 'text');
+    doc.text(deal.risk_score.toString(), riskBoxX + riskBoxW / 2, riskBoxY + 18, { align: 'center' });
 
-    doc.setFontSize(8);
-    doc.text(riskLabel, riskBoxX + riskBoxW / 2, riskBoxY + 29, { align: 'center' });
+    doc.setFontSize(7);
+    doc.text(riskInfo.label, riskBoxX + riskBoxW / 2, riskBoxY + 25, { align: 'center' });
 
-    return y + boxHeight + 12;
+    return y + boxHeight + 8;
 }
 
 /**
- * Draw section divider
- */
-function drawDivider(doc: jsPDF, y: number): number {
-    doc.setDrawColor(...COLOR.lightGray);
-    doc.setLineWidth(0.3);
-    doc.line(PAGE.marginLeft, y, PAGE.width - PAGE.marginRight, y);
-    return y + 8;
-}
-
-/**
- * Draw the credit breakdown table
+ * Draw credit breakdown table - Returns new Y position
  */
 function drawCreditBreakdown(doc: jsPDF, y: number, deal: Deal): number {
     // Section header
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(...COLOR.navy);
-    doc.text('CREDIT BREAKDOWN', PAGE.marginLeft, y);
+    doc.setFontSize(9);
+    setColor(doc, COLORS.navy, 'text');
+    doc.text('CREDIT BREAKDOWN', PAGE_CONFIG.margin.left, y);
 
-    // Thin divider
-    y += 3;
-    doc.setDrawColor(...COLOR.lightGray);
-    doc.setLineWidth(0.3);
-    doc.line(PAGE.marginLeft, y, PAGE.marginLeft + 42, y);
+    y += 2;
+    setColor(doc, COLORS.blue, 'draw');
+    doc.setLineWidth(0.4);
+    doc.line(PAGE_CONFIG.margin.left, y, PAGE_CONFIG.margin.left + 38, y);
 
-    y += 10;
+    y += 8;
 
-    // Credit line items
+    // Credit items data
     const credits = [
         {
-            name: 'Research & Development Credit (IRC §41)',
+            name: 'Research & Development Credit',
+            code: 'IRC §41 • Form 6765',
             eligible: deal.is_rd_eligible ?? false,
             value: deal.rd_credit_value ?? 0,
-            code: 'Form 6765',
         },
         {
-            name: 'Training & Education Assistance (IRC §127)',
+            name: 'Training & Education Assistance',
+            code: 'IRC §127 • Form W-2',
             eligible: deal.is_training_eligible ?? false,
             value: deal.training_credit_value ?? 0,
-            code: 'Form W-2',
         },
         {
-            name: 'Energy Efficient Commercial Property (§179D)',
+            name: 'Energy Efficient Property',
+            code: '§179D • Form 7205',
             eligible: deal.is_green_eligible ?? false,
             value: deal.green_energy_value ?? 0,
-            code: 'Form 7205',
         },
         {
-            name: 'Employee Retention Credit (IRC §3134)',
+            name: 'Employee Retention Credit',
+            code: 'IRC §3134 • Form 941-X',
             eligible: deal.is_erc_eligible ?? false,
             value: deal.erc_value ?? 0,
-            code: 'Form 941-X',
         },
     ];
 
-    const lineHeight = 14;
-    // const itemWidth = CONTENT_WIDTH;
-
-    doc.setFontSize(9);
+    const rowHeight = 14;
+    const valueX = PAGE_CONFIG.width - PAGE_CONFIG.margin.right;
 
     credits.forEach((credit, index) => {
-        const lineY = y + (index * lineHeight);
-        const isEligible = credit.eligible && credit.value > 0;
+        const rowY = y + (index * rowHeight);
+        const isActive = credit.eligible && credit.value > 0;
 
-        // Alternating row background
+        // Alternating background
         if (index % 2 === 0) {
-            doc.setFillColor(250, 250, 252);
-            doc.rect(PAGE.marginLeft, lineY - 4, CONTENT_WIDTH, lineHeight - 1, 'F');
+            setColor(doc, { r: 252, g: 252, b: 254 }, 'fill');
+            doc.rect(PAGE_CONFIG.margin.left, rowY - 3, CONTENT_WIDTH, rowHeight - 1, 'F');
         }
 
-        // Status indicator
-        if (isEligible) {
-            doc.setFillColor(...COLOR.green);
-            doc.circle(PAGE.marginLeft + 4, lineY + 1, 2, 'F');
+        // Status dot
+        if (isActive) {
+            setColor(doc, COLORS.green, 'fill');
+            doc.circle(PAGE_CONFIG.margin.left + 4, rowY + 2, 1.8, 'F');
         } else {
-            doc.setDrawColor(...COLOR.lightGray);
-            doc.setLineWidth(0.5);
-            doc.circle(PAGE.marginLeft + 4, lineY + 1, 2, 'S');
+            setColor(doc, COLORS.lightGray, 'draw');
+            doc.setLineWidth(0.4);
+            doc.circle(PAGE_CONFIG.margin.left + 4, rowY + 2, 1.8, 'S');
         }
 
         // Credit name
         doc.setFont('helvetica', 'normal');
-        const nameColor = isEligible ? COLOR.darkGray : COLOR.lightGray;
-        doc.setTextColor(nameColor[0], nameColor[1], nameColor[2]);
-        doc.text(credit.name, PAGE.marginLeft + 10, lineY + 1);
+        doc.setFontSize(9);
+        setColor(doc, isActive ? COLORS.darkText : COLORS.lightGray, 'text');
+        doc.text(credit.name, PAGE_CONFIG.margin.left + 10, rowY + 2);
 
-        // Value
-        const valueText = isEligible ? formatCurrency(credit.value) : '—';
+        // Code (small)
+        doc.setFontSize(7);
+        setColor(doc, COLORS.mediumGray, 'text');
+        doc.text(credit.code, PAGE_CONFIG.margin.left + 10, rowY + 7);
+
+        // Value with dot leader
+        const valueText = isActive ? formatCurrency(credit.value) : '—';
         doc.setFont('helvetica', 'bold');
-        const valueColor = isEligible ? COLOR.navy : COLOR.lightGray;
-        doc.setTextColor(valueColor[0], valueColor[1], valueColor[2]);
-        doc.text(valueText, PAGE.width - PAGE.marginRight, lineY + 1, { align: 'right' });
+        doc.setFontSize(9);
+        setColor(doc, isActive ? COLORS.navy : COLORS.lightGray, 'text');
+        doc.text(valueText, valueX, rowY + 2, { align: 'right' });
 
-        // Dot leader
-        if (isEligible) {
+        // Dot leader for active items
+        if (isActive) {
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(9);
-            doc.setTextColor(...COLOR.lightGray);
+            setColor(doc, COLORS.lightGray, 'text');
+
             const nameWidth = doc.getTextWidth(credit.name);
             const valueWidth = doc.getTextWidth(valueText);
-            const dotsStart = PAGE.marginLeft + 10 + nameWidth + 2;
-            const dotsEnd = PAGE.width - PAGE.marginRight - valueWidth - 2;
-            const dotSpacing = 2;
+            const startX = PAGE_CONFIG.margin.left + 10 + nameWidth + 3;
+            const endX = valueX - valueWidth - 3;
 
-            for (let x = dotsStart; x < dotsEnd; x += dotSpacing) {
-                doc.text('.', x, lineY + 1);
+            let dotX = startX;
+            while (dotX < endX) {
+                doc.text('.', dotX, rowY + 2);
+                dotX += 2;
             }
         }
-
-        // Form code (small)
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7);
-        doc.setTextColor(...COLOR.mediumGray);
-        doc.text(credit.code, PAGE.marginLeft + 10, lineY + 6);
     });
 
-    y += credits.length * lineHeight + 4;
+    y += credits.length * rowHeight + 2;
 
-    // Total line
-    doc.setDrawColor(...COLOR.navy);
+    // Total separator line
+    setColor(doc, COLORS.navy, 'draw');
     doc.setLineWidth(0.5);
-    doc.line(PAGE.marginLeft, y, PAGE.width - PAGE.marginRight, y);
+    doc.line(PAGE_CONFIG.margin.left, y, PAGE_CONFIG.width - PAGE_CONFIG.margin.right, y);
 
-    y += 8;
+    y += 6;
 
     // Total row
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(...COLOR.navy);
-    doc.text('TOTAL ESTIMATED CREDITS', PAGE.marginLeft, y);
-    doc.text(formatCurrency(deal.value), PAGE.width - PAGE.marginRight, y, { align: 'right' });
+    doc.setFontSize(10);
+    setColor(doc, COLORS.navy, 'text');
+    doc.text('TOTAL ESTIMATED CREDITS', PAGE_CONFIG.margin.left, y);
+    doc.text(formatCurrency(deal.value), valueX, y, { align: 'right' });
 
-    return y + 12;
+    return y + 10;
 }
 
 /**
- * Draw eligibility summary boxes
+ * Draw eligibility boxes - Returns new Y position
  */
-function drawEligibilitySummary(doc: jsPDF, y: number, deal: Deal): number {
+function drawEligibilityBoxes(doc: jsPDF, y: number, deal: Deal): number {
     // Section header
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(...COLOR.navy);
-    doc.text('ELIGIBILITY SUMMARY', PAGE.marginLeft, y);
+    doc.setFontSize(9);
+    setColor(doc, COLORS.navy, 'text');
+    doc.text('ELIGIBILITY SUMMARY', PAGE_CONFIG.margin.left, y);
 
-    y += 3;
-    doc.setDrawColor(...COLOR.lightGray);
-    doc.setLineWidth(0.3);
-    doc.line(PAGE.marginLeft, y, PAGE.marginLeft + 48, y);
+    y += 2;
+    setColor(doc, COLORS.blue, 'draw');
+    doc.setLineWidth(0.4);
+    doc.line(PAGE_CONFIG.margin.left, y, PAGE_CONFIG.margin.left + 42, y);
 
-    y += 10;
+    y += 8;
 
-    const items = [
-        { code: 'IRC §41', name: 'R&D Credit', eligible: deal.is_rd_eligible },
-        { code: 'IRC §127', name: 'Training', eligible: deal.is_training_eligible },
+    const boxes = [
+        { code: 'IRC §41', name: 'R&D', eligible: deal.is_rd_eligible },
+        { code: '§127', name: 'Training', eligible: deal.is_training_eligible },
         { code: '§179D', name: 'Energy', eligible: deal.is_green_eligible },
         { code: 'ERC', name: 'Retention', eligible: deal.is_erc_eligible },
     ];
 
-    const boxWidth = (CONTENT_WIDTH - 15) / 4;
-    const boxHeight = 28;
+    const boxWidth = (CONTENT_WIDTH - 12) / 4;
+    const boxHeight = 24;
 
-    items.forEach((item, index) => {
-        const boxX = PAGE.marginLeft + (index * (boxWidth + 5));
-        const isEligible = item.eligible ?? false;
+    boxes.forEach((box, index) => {
+        const boxX = PAGE_CONFIG.margin.left + (index * (boxWidth + 4));
+        const isEligible = box.eligible ?? false;
 
-        // Box
-        doc.setFillColor(isEligible ? 235 : 250, isEligible ? 245 : 250, isEligible ? 255 : 252);
-        const boxBorder = isEligible ? COLOR.blue : COLOR.lightGray;
-        doc.setDrawColor(boxBorder[0], boxBorder[1], boxBorder[2]);
-        doc.setLineWidth(isEligible ? 0.5 : 0.3);
+        // Box background
+        setColor(doc, isEligible ? { r: 239, g: 246, b: 255 } : COLORS.bgLight, 'fill');
+        setColor(doc, isEligible ? COLORS.blue : COLORS.lightGray, 'draw');
+        doc.setLineWidth(isEligible ? 0.5 : 0.2);
         doc.roundedRect(boxX, y, boxWidth, boxHeight, 2, 2, 'FD');
 
         // Code
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        const codeColor = isEligible ? COLOR.blue : COLOR.mediumGray;
-        doc.setTextColor(codeColor[0], codeColor[1], codeColor[2]);
-        doc.text(item.code, boxX + boxWidth / 2, y + 9, { align: 'center' });
+        doc.setFontSize(7);
+        setColor(doc, isEligible ? COLORS.blue : COLORS.mediumGray, 'text');
+        doc.text(box.code, boxX + boxWidth / 2, y + 7, { align: 'center' });
 
         // Name
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7);
-        doc.setTextColor(...COLOR.darkGray);
-        doc.text(item.name, boxX + boxWidth / 2, y + 16, { align: 'center' });
+        doc.setFontSize(6);
+        setColor(doc, COLORS.darkText, 'text');
+        doc.text(box.name, boxX + boxWidth / 2, y + 13, { align: 'center' });
 
         // Status
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7);
-        const statusColor = isEligible ? COLOR.green : COLOR.lightGray;
-        doc.setTextColor(statusColor[0], statusColor[1], statusColor[2]);
-        doc.text(isEligible ? '✓ Eligible' : '— N/A', boxX + boxWidth / 2, y + 23, { align: 'center' });
+        doc.setFontSize(6);
+        setColor(doc, isEligible ? COLORS.green : COLORS.lightGray, 'text');
+        doc.text(isEligible ? '✓ Eligible' : '— N/A', boxX + boxWidth / 2, y + 19, { align: 'center' });
     });
 
-    return y + boxHeight + 12;
+    return y + boxHeight + 8;
 }
 
 /**
- * Draw analysis details section
+ * Draw analysis metadata - Returns new Y position
  */
-function drawAnalysisDetails(doc: jsPDF, y: number, deal: Deal): number {
+function drawAnalysisInfo(doc: jsPDF, y: number, deal: Deal, preparedBy?: string): number {
     // Section header
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(...COLOR.navy);
-    doc.text('ANALYSIS DETAILS', PAGE.marginLeft, y);
+    doc.setFontSize(9);
+    setColor(doc, COLORS.navy, 'text');
+    doc.text('ANALYSIS DETAILS', PAGE_CONFIG.margin.left, y);
 
-    y += 3;
-    doc.setDrawColor(...COLOR.lightGray);
-    doc.setLineWidth(0.3);
-    doc.line(PAGE.marginLeft, y, PAGE.marginLeft + 42, y);
+    y += 2;
+    setColor(doc, COLORS.blue, 'draw');
+    doc.setLineWidth(0.4);
+    doc.line(PAGE_CONFIG.margin.left, y, PAGE_CONFIG.margin.left + 36, y);
 
-    y += 10;
+    y += 7;
 
-    // Details grid
-    const col1X = PAGE.marginLeft;
-    const col2X = PAGE.marginLeft + 55;
-    const col3X = PAGE.marginLeft + 110;
-
-    const details = [
-        { label: 'Confidence Score', value: `${deal.confidence_score ?? 85}%`, x: col1X },
-        { label: 'Employee Count', value: deal.employee_count?.toString() ?? '—', x: col2X },
-        { label: 'Analysis Date', value: formatDate(deal.analyzed_at), x: col3X },
+    // Info items
+    const items = [
+        { label: 'Confidence Score', value: `${deal.confidence_score ?? 85}%` },
+        { label: 'Employee Count', value: deal.employee_count?.toString() ?? '—' },
+        { label: 'Analysis Date', value: formatDate(deal.analyzed_at) },
     ];
 
-    doc.setFontSize(8);
+    const colWidth = 50;
 
-    details.forEach(detail => {
+    doc.setFontSize(7);
+
+    items.forEach((item, index) => {
+        const x = PAGE_CONFIG.margin.left + (index * colWidth);
+
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...COLOR.mediumGray);
-        doc.text(detail.label, detail.x, y);
+        setColor(doc, COLORS.mediumGray, 'text');
+        doc.text(item.label, x, y);
 
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...COLOR.darkGray);
-        doc.text(detail.value, detail.x, y + 5);
+        setColor(doc, COLORS.darkText, 'text');
+        doc.text(item.value, x, y + 4);
     });
 
-    return y + 16;
-}
+    // Certification stamp (right side)
+    const stampW = 45;
+    const stampH = 26;
+    const stampX = PAGE_CONFIG.width - PAGE_CONFIG.margin.right - stampW;
+    const stampY = y - 5;
 
-/**
- * Draw certification stamp
- */
-function drawCertificationStamp(doc: jsPDF, y: number, preparedBy?: string): number {
-    const stampWidth = 55;
-    const stampHeight = 32;
-    const stampX = PAGE.width - PAGE.marginRight - stampWidth;
-
-    // Outer border
-    doc.setDrawColor(...COLOR.blue);
-    doc.setLineWidth(1.5);
-    doc.roundedRect(stampX, y, stampWidth, stampHeight, 2, 2, 'S');
-
-    // Inner border
+    setColor(doc, COLORS.blue, 'draw');
+    doc.setLineWidth(1);
+    doc.roundedRect(stampX, stampY, stampW, stampH, 2, 2, 'S');
     doc.setLineWidth(0.3);
-    doc.roundedRect(stampX + 2, y + 2, stampWidth - 4, stampHeight - 4, 1, 1, 'S');
+    doc.roundedRect(stampX + 1.5, stampY + 1.5, stampW - 3, stampH - 3, 1.5, 1.5, 'S');
 
-    // Text
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(...COLOR.blue);
-    doc.text('VERIFIED', stampX + stampWidth / 2, y + 12, { align: 'center' });
+    doc.setFontSize(8);
+    setColor(doc, COLORS.blue, 'text');
+    doc.text('VERIFIED', stampX + stampW / 2, stampY + 9, { align: 'center' });
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6);
-    doc.setTextColor(...COLOR.mediumGray);
-    doc.text('GrantFlow Engine v4.2', stampX + stampWidth / 2, y + 18, { align: 'center' });
-    doc.text(formatDate(), stampX + stampWidth / 2, y + 23, { align: 'center' });
+    doc.setFontSize(5);
+    setColor(doc, COLORS.mediumGray, 'text');
+    doc.text('GrantFlow Engine v4.2', stampX + stampW / 2, stampY + 15, { align: 'center' });
+    doc.text(formatDate(), stampX + stampW / 2, stampY + 19, { align: 'center' });
 
     if (preparedBy) {
-        doc.setFontSize(5);
-        doc.text(`By: ${preparedBy}`, stampX + stampWidth / 2, y + 28, { align: 'center' });
+        doc.text(`By: ${preparedBy}`, stampX + stampW / 2, stampY + 23, { align: 'center' });
     }
 
-    return y + stampHeight + 8;
+    return y + 14;
 }
 
 /**
- * Draw watermark
+ * Draw watermark (called first, behind all content)
  */
 function drawWatermark(doc: jsPDF, text: string): void {
     doc.saveGraphicsState();
 
-    doc.setTextColor(230, 230, 230);
-    doc.setFontSize(50);
+    doc.setTextColor(235, 235, 235);
+    doc.setFontSize(45);
     doc.setFont('helvetica', 'bold');
 
-    // @ts-ignore - GState exists in jsPDF but types might be missing
-    if (doc.GState) {
-        // @ts-ignore
-        doc.setGState(new doc.GState({ opacity: 0.12 }));
-    }
-
-    doc.text(text, PAGE.width / 2, PAGE.height / 2, {
+    // Draw rotated watermark at center
+    doc.text(text, PAGE_CONFIG.width / 2, PAGE_CONFIG.height / 2, {
         angle: -45,
         align: 'center',
     });
@@ -605,63 +589,51 @@ function drawWatermark(doc: jsPDF, text: string): void {
 }
 
 /**
- * Draw footer - FIXED at Y=280mm
+ * Draw footer - ALWAYS at fixed position relative to page bottom
  */
 function drawFooter(doc: jsPDF): void {
-    const footerY = 280;
+    // Calculate fixed positions from page bottom
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const disclaimerY = pageHeight - 18;
+    const bottomLineY = pageHeight - 22;
+    const timestampY = pageHeight - 8;
 
-    // Divider line
-    doc.setDrawColor(...COLOR.lightGray);
-    doc.setLineWidth(0.3);
-    doc.line(PAGE.marginLeft, footerY - 5, PAGE.width - PAGE.marginRight, footerY - 5);
+    // Separator line
+    setColor(doc, COLORS.lightGray, 'draw');
+    doc.setLineWidth(0.2);
+    doc.line(PAGE_CONFIG.margin.left, bottomLineY, PAGE_CONFIG.width - PAGE_CONFIG.margin.right, bottomLineY);
 
-    // Legal text - 8pt font
+    // Disclaimer text - 6pt font, centered
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.5);
-    doc.setTextColor(...COLOR.mediumGray);
+    doc.setFontSize(6);
+    setColor(doc, COLORS.mediumGray, 'text');
 
-    const disclaimerLines = [
-        'DISCLAIMER: This report is for informational purposes only and does not constitute tax, legal, or financial advice. Credit estimates are preliminary',
-        'and based on IRC Section 41 (R&D), Section 179D (Energy Efficiency), Section 127 (Education), and Section 3134 (ERC). Actual credit amounts',
-        'are subject to IRS review and may vary. Consult a qualified tax professional before claiming any credits. © ' + new Date().getFullYear() + ' GrantFlow Systems, Inc.',
+    const disclaimerText = [
+        'DISCLAIMER: This report is for informational purposes only and does not constitute tax, legal, or financial advice.',
+        'Credit estimates are based on IRC Section 41 (R&D), Section 179D (Energy), Section 127 (Education), and Section 3134 (ERC).',
+        'Actual amounts subject to IRS review. Consult a qualified tax professional. © ' + new Date().getFullYear() + ' GrantFlow Systems, Inc.',
     ];
 
-    disclaimerLines.forEach((line, index) => {
-        doc.text(line, PAGE.width / 2, footerY + (index * 3.5), { align: 'center' });
+    disclaimerText.forEach((line, index) => {
+        doc.text(line, PAGE_CONFIG.width / 2, disclaimerY + (index * 3), { align: 'center' });
     });
 
-    // Page number and timestamp
+    // Bottom row: timestamp and page number
     doc.setFontSize(7);
-    doc.text('Page 1 of 1', PAGE.width - PAGE.marginRight, PAGE.height - 10, { align: 'right' });
-    doc.text(`Generated: ${new Date().toLocaleString()}`, PAGE.marginLeft, PAGE.height - 10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, PAGE_CONFIG.margin.left, timestampY);
+    doc.text('Page 1 of 1', PAGE_CONFIG.width - PAGE_CONFIG.margin.right, timestampY, { align: 'right' });
 }
 
 // ============================================================================
-// MAIN EXPORT FUNCTIONS
+// MAIN EXPORT FUNCTION
 // ============================================================================
 
 /**
- * Generate a professional audit report PDF
+ * Generate a professional audit report PDF with dynamic spacing
  * 
- * @param deal - Deal data to include in the report
+ * @param deal - Deal data for the report
  * @param options - Optional configuration
  * @returns jsPDF document instance
- * 
- * @example
- * ```typescript
- * const deal = {
- *   id: 123,
- *   company: 'Acme Corp',
- *   value: 150000,
- *   risk_score: 25,
- *   status: 'VERIFIED',
- *   is_rd_eligible: true,
- *   rd_credit_value: 120000,
- * };
- * 
- * const pdf = generateAuditReport(deal);
- * pdf.save('audit-report.pdf');
- * ```
  */
 export function generateAuditReport(deal: Deal, options: ReportOptions = {}): jsPDF {
     const {
@@ -672,50 +644,46 @@ export function generateAuditReport(deal: Deal, options: ReportOptions = {}): js
         watermarkText = 'CONFIDENTIAL',
     } = options;
 
-    // Create PDF
+    // Create document
     const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4',
     });
 
-    // Draw watermark first (behind content)
+    // Draw watermark first (background layer)
     if (showWatermark) {
         drawWatermark(doc, watermarkText);
     }
 
-    // Build report sections with proper Y tracking
-    let y = drawHeader(doc, caseId);
+    // Track Y position dynamically
+    let currentY: number;
 
-    y = drawTitle(doc, y, reportTitle);
+    // Draw sections in order, each returns new Y
+    currentY = drawHeader(doc, caseId);
+    currentY = drawTitle(doc, currentY, reportTitle);
+    currentY = drawClientInfo(doc, currentY, deal);
+    currentY = drawDivider(doc, currentY);
+    currentY = drawValueBox(doc, currentY, deal);
+    currentY = drawCreditBreakdown(doc, currentY, deal);
+    currentY = drawDivider(doc, currentY);
+    currentY = drawEligibilityBoxes(doc, currentY, deal);
+    currentY = drawDivider(doc, currentY);
+    currentY = drawAnalysisInfo(doc, currentY, deal, preparedBy);
 
-    y = drawClientInfo(doc, y, deal);
+    // Safety check: warn if content exceeded safe zone
+    if (currentY > CONTENT_END_Y) {
+        console.warn(`Content overflow: Y=${currentY} exceeds safe zone (${CONTENT_END_Y})`);
+    }
 
-    y = drawDivider(doc, y);
-
-    y = drawValueSummary(doc, y, deal);
-
-    y = drawCreditBreakdown(doc, y, deal);
-
-    y = drawDivider(doc, y);
-
-    y = drawEligibilitySummary(doc, y, deal);
-
-    y = drawDivider(doc, y);
-
-    y = drawAnalysisDetails(doc, y, deal);
-
-    // Certification stamp (positioned relative to current Y)
-    drawCertificationStamp(doc, y - 20, preparedBy);
-
-    // Footer - always at fixed position
+    // Draw footer at fixed position (always last)
     drawFooter(doc);
 
     return doc;
 }
 
 /**
- * Generate and download the audit report
+ * Generate and download the report
  */
 export function downloadAuditReport(
     deal: Deal,
@@ -727,7 +695,7 @@ export function downloadAuditReport(
 }
 
 /**
- * Generate report as Blob
+ * Generate report as Blob for upload/email
  */
 export function generateAuditReportBlob(deal: Deal, options: ReportOptions = {}): Blob {
     const doc = generateAuditReport(deal, options);
@@ -747,8 +715,8 @@ export function generateAuditReportBase64(deal: Deal, options: ReportOptions = {
  */
 export function previewAuditReport(deal: Deal, options: ReportOptions = {}): void {
     const doc = generateAuditReport(deal, options);
-    const blobUrl = URL.createObjectURL(doc.output('blob'));
-    window.open(blobUrl, '_blank');
+    const url = URL.createObjectURL(doc.output('blob'));
+    window.open(url, '_blank');
 }
 
 // Default export
