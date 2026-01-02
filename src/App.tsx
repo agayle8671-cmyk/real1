@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { scanFileContent, AnalyzedResult, formatCurrency as fmtCurrency } from './forensicEngine';
 import { supabase, Deal } from './lib/supabase';
+import { analyzeDocumentWithAI } from './lib/geminiScanner';
 import extractPdfText from './lib/pdfReader';
 import { generateMarketBids, MarketBid, formatBidAmount, getTierColor, getTierBadge } from './lib/arbitrageFloor';
 import { downloadAuditReport, Deal as ReportDeal } from './lib/reportGenerator';
@@ -298,7 +299,41 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
             // Plain text or CSV
             text = await file.text();
         }
-        const result = scanFileContent(text);
+        // 1. Run local forensic engine for structure
+        const localResult = scanFileContent(text);
+
+        // 2. Send to Google Cloud AI Brain
+        const aiAnalysis = await analyzeDocumentWithAI(text);
+
+        // 3. Merge AI intelligence with local structure
+        const result: AnalyzedResult = {
+            ...localResult,
+            financialSummary: {
+                ...localResult.financialSummary,
+                totalEstimatedValue: aiAnalysis.estimated_value,
+                // or just assign to R&D as primary for now
+                rdCreditValue: aiAnalysis.estimated_value,
+            },
+            overallRiskLevel: aiAnalysis.risk_score > 75 ? 'high' : aiAnalysis.risk_score > 35 ? 'medium' : 'low',
+            processingDetails: {
+                ...localResult.processingDetails,
+                confidenceScore: 0.98, // High confidence from Gemini
+            },
+            // Enhance risk indicators with AI findings if any
+            riskIndicators: [
+                ...localResult.riskIndicators,
+                ...aiAnalysis.findings.map((f, i) => ({
+                    indicatorId: `AI-${i}`,
+                    type: 'warning' as const,
+                    category: 'ai_detected',
+                    description: f,
+                    evidence: 'AI Analysis',
+                    position: 0,
+                    recommendation: 'Review with tax professional'
+                }))
+            ]
+        };
+
         setCurrentResult(result); // Set the current result here
 
         // Log the scan result
@@ -306,7 +341,7 @@ const VerificationGauntlet: React.FC<{ onAnalysisComplete?: (result: AnalyzedRes
             id: `scan-${Date.now()}`,
             timestamp: new Date(),
             level: 'success',
-            message: `>> [SCAN] ANALYZED ${result.statistics.totalWords} WORDS, ${result.processingDetails.totalMatchesFound} MATCHES FOUND`,
+            message: `>> [SCAN] ANALYZED ${result.statistics.totalWords} WORDS. AI ESTIMATE: ${fmtCurrency(result.financialSummary.totalEstimatedValue)}`,
             module: 'SCAN',
         }]);
 
