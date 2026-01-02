@@ -1,18 +1,19 @@
 // src/lib/geminiScanner.ts
-const FUNCTION_URL = 'https://grantbrain-712720285960.us-central1.run.app';
+// ============================================================================
+// GEMINI AI SCANNER - Bridge to Google Cloud Function
+// ============================================================================
+
+// Use the exact URL from your deployment (with endpoint!)
+const FUNCTION_URL = 'https://grantbrain-712720285960.us-central1.run.app/analyzeFinancials';
 
 export interface AIAnalysis {
-    risk_score: number;
     estimated_value: number;
+    risk_score: number;
     findings: string[];
 }
 
 export async function analyzeDocumentWithAI(text: string): Promise<AIAnalysis> {
-    // Task 1: Loud Debugging
-    // eslint-disable-next-line no-alert
-    alert("AI AGENT STARTING: " + text.slice(0, 50));
-    console.error("🔴 AI TRIGGERED - CHECK NETWORK TAB");
-    console.log("SENDING TO GEMINI...", text.slice(0, 100));
+    console.log("🚀 SENDING TO AI...", text.slice(0, 50));
 
     try {
         const response = await fetch(FUNCTION_URL, {
@@ -21,22 +22,27 @@ export async function analyzeDocumentWithAI(text: string): Promise<AIAnalysis> {
             body: JSON.stringify({ text }),
         });
 
-        if (!response.ok) throw new Error('AI Brain Connection Failed');
+        if (!response.ok) {
+            throw new Error(`Server Error: ${response.status}`);
+        }
 
         const data = await response.json();
+        console.log("✅ RAW AI DATA:", data);
 
-        // The Cloud Function returns structured JSON. Let's adapt it.
-        // Note: Adjust these fields based on exactly what your index.js returns
-        // For now we assume the structure from the Opus prompt.
-        // The backend returns: { analysis: { risk_score, eligibility: { estimated_credit, ... }, rd_activities: [] } }
+        // MAPPING FIX: Check for the specific fields our Cloud Function sends
+        // The Cloud Function sends: { totalCredit, riskScore, findings }
+        const creditValue = data.totalCredit || data.estimated_value || 0;
+        const riskValue = data.riskScore || data.risk_score || 50;
+
         return {
-            risk_score: data.analysis?.risk_score || 50,
-            estimated_value: data.analysis?.eligibility?.estimated_credit || 0,
-            findings: data.analysis?.rd_activities || []
+            estimated_value: Number(creditValue), // Force it to be a number
+            risk_score: Number(riskValue),
+            findings: data.findings || ["AI Analysis Complete"]
         };
+
     } catch (err) {
-        console.error("AI Error:", err);
-        // Fallback for demo if AI fails
-        return { risk_score: 10, estimated_value: 0, findings: ["Error connecting to AI"] };
+        console.error("❌ AI FAILURE:", err);
+        // Return a dummy object so the UI doesn't crash, but make it obvious it failed
+        return { estimated_value: 0, risk_score: 0, findings: ["Error connecting to AI"] };
     }
 }
